@@ -39,7 +39,22 @@ mod osobi;
 // источник энергии
 struct EnergySource {
     coordinate: common::Coordinates,
-    energy: f32,
+    power: i32,
+}
+
+fn create_sol() -> EnergySource {
+
+    let coordinate = common::Coordinates{
+        x: 0,
+        y: 0,
+        z: 0,
+    };
+    
+    EnergySource {
+        coordinate: coordinate,
+        power: 1000,
+    }
+    
 }
 
 // impl EnergySource {
@@ -56,16 +71,17 @@ struct PoisonSource {
 
 fn main() {
 
-    let coord = common::Coordinates{
+    let coordinate = common::Coordinates{
         x: 10,
         y: 20,
         z: 15,
     };
     
     let mut osobj = osobi::Osobj::new(
-        coord, 
+        coordinate, 
         osobi::simple_brain(),
         osobi::simple_sensors(),
+        osobi::simple_legs(),
         100
     );
 

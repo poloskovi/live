@@ -422,6 +422,16 @@ impl Neuronet{
         }
         result
     }
+    
+    // количество входов нейросети
+    pub fn n_inputs(&self) -> usize{
+        self.net[0].nrow
+    }
+        
+    // количество выходов нейросети
+    pub fn n_outputs(&self) -> usize{
+        self.net[self.net.len()-1].ncol
+    }
         
 }
 
