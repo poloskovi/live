@@ -36,15 +36,18 @@ mod common;
 mod neuronet;
 mod osobi;
 
+use common::{Coordinates, Direction};
+use osobi::Osobj;
+
 // источник энергии
 struct EnergySource {
-    coordinate: common::Coordinates,
+    coordinate: Coordinates,
     power: i32,
 }
 
 fn create_sol() -> EnergySource {
 
-    let coordinate = common::Coordinates{
+    let coordinate = Coordinates{
         x: 0,
         y: 0,
         z: 0,
@@ -65,19 +68,19 @@ fn create_sol() -> EnergySource {
 
 // источник яда
 struct PoisonSource {
-    coordinate: common::Coordinates,
+    coordinate: Coordinates,
     energy: f32,
 }
 
 fn main() {
 
-    let coordinate = common::Coordinates{
+    let coordinate = Coordinates{
         x: 10,
         y: 20,
         z: 15,
     };
     
-    let mut osobj = osobi::Osobj::new(
+    let mut osobj = Osobj::new(
         coordinate, 
         osobi::simple_brain(),
         osobi::simple_sensors(),

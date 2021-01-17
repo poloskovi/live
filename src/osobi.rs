@@ -11,7 +11,7 @@
 //      2. На [U_вых] накладывается некоторое изменение Дельта: [U_вых] + [Дельта] = [U вых']
 //      3. Особь совершает движение.
 //      4. Определяется изменение энергии в результате этого движения.
-//          Если оно лучше образца, то сеть тренируется по [U вых']. Образец в памяти заменяется новый.
+//          Если оно лучше образца, то сеть тренируется по [U вых']. Образец в памяти заменяется на новый.
 //          Если оно хуже образца, образцу добавляется вес.
 // Или так:
 
@@ -43,6 +43,30 @@ struct MemoryCell {
     delta_energy: i16,
     // количество истинных срабатываний, когда образец из ячейки работал лучше измененного
     weight: u32,
+}
+
+struct Memory {
+    cells: Vec<MemoryCell>,
+}
+
+impl Matrix {
+    fn dist(&self, other:&Matrix) -> u32{
+        0
+    }
+}
+
+impl Memory{
+    fn new() -> Memory {
+        Memory{
+            cells: Vec::<MemoryCell>::new(),
+        }
+    }
+    // найти ближайший образец.
+    // возвращает индекс ячейки памяти
+    fn find_nearest(&self, input: &Matrix) -> Option<&MemoryCell>{
+        self.cells.iter().min_by_key(|p| p.input.dist(input))
+        // todo!("")
+    }
 }
 
 // особь
@@ -80,7 +104,7 @@ pub struct Osobj {
     //size: u32,
     
     // Память состояний
-    memory: Vec<MemoryCell>
+    memory: Memory
 }
 
 impl Osobj {
@@ -109,7 +133,7 @@ impl Osobj {
             sensors: sensors,
             legs: legs,
             energy: energy,
-            memory: Vec::<MemoryCell>::new(),
+            memory: Memory::new(),
             // direction: common::Direction::random(),
             massa: 0,
         };
