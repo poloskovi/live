@@ -15,7 +15,7 @@
 //          Если оно хуже образца, образцу добавляется вес.
 // Или так:
 
-use crate::common::{Coordinates, Direction};
+use crate::common::{Point, Direction};
 use crate::neuronet::{Matrix, Neuronet};
 
 pub enum TypeOfSensor {
@@ -50,8 +50,10 @@ struct Memory {
 }
 
 impl Matrix {
-    fn dist(&self, other:&Matrix) -> u32{
-        0
+    // "расстояние" между векторами
+    // разница между наборами входных сигналов
+    fn distantion(&self, other:&Matrix) -> u32{
+        todo!("")
     }
 }
 
@@ -73,7 +75,7 @@ impl Memory{
 pub struct Osobj {
 
     // текущие координаты
-    position: Coordinates,
+    pub position: Point,
     
     // направление (от направления особи завивит направление обзора сенсора)
     //      сделать потом
@@ -81,6 +83,19 @@ pub struct Osobj {
     
     // Нейросеть рецепторы-органы движения
     brain: Neuronet,
+    
+    // Единая нейросеть: Вход (сигнал на рецепторах) - анализатор - органы движения - окружающая среда - изменение целевой функции 
+    // (в простейшем случае целевая функция - это накопление энергии)
+    //      Нет, так нельзя. Нейросеть окружающей среды должна иметь на входе и движение ног, и значения параметров окружающей среды, 
+    //      полученные через сенсоры.
+    //      Кроме того, непонятно, что есть целевая функция. Стремиться к какой-то цифре? Но вдалеке от источника света ее не достичь
+    //      Вариант с памятью лучше, так как на примерно одинаковых входных значениях выбирается движение, дающее максимальный прирост 
+    //      целевой функции для данных условий
+    //      
+    //brain_and_env: Neuronet,
+    
+    // позиция органов движения в нейросети
+    //pos_legs: usize,
     
     // Сенсоры, получают информацию из окружающей среды и передают на вход нейросети
     // индекс сенсора равен индексу входного слоя нейросети
@@ -105,12 +120,16 @@ pub struct Osobj {
     
     // Память состояний
     memory: Memory
+    
+    // Попробуем вместо памяти состояний использовать расчет "нейросети" окружаюющей среды
+    //environment: Neuronet,
 }
 
 impl Osobj {
     
-    pub fn new(position: Coordinates, 
+    pub fn new(position: Point, 
         brain: Neuronet, 
+        environment: Neuronet, 
         sensors: Vec<Sensor>, 
         legs: Vec<Leg>, 
         energy: u32) -> Osobj {
@@ -130,10 +149,11 @@ impl Osobj {
         let mut osobj = Osobj{
             position: position,
             brain: brain,
+            environment: environment,
             sensors: sensors,
             legs: legs,
             energy: energy,
-            memory: Memory::new(),
+            //memory: Memory::new(),
             // direction: common::Direction::random(),
             massa: 0,
         };
@@ -179,4 +199,63 @@ pub fn simple_legs() -> Vec<Leg> {
         direction: Direction::random(),
     };
     vec![leg,]
+}
+
+// Особь для тестирования
+pub fn sample_osobj() -> Osobj{
+
+    let count_of_leg = 4;
+    let count_of_sensors = 4;
+
+    let brain = Neuronet::new(vec![count_of_sensors, 10, 10, count_of_leg]);
+    let environment = Neuronet::new(vec![count_of_leg, 10, 10, count_of_sensors]);
+    
+    let leg_1 = Leg{
+        direction: Direction {fi: 270}
+    };
+    let leg_2 = Leg{
+        direction: Direction {fi: 0}
+    };
+    let leg_3 = Leg{
+        direction: Direction {fi: 90}
+    };
+    let leg_4 = Leg{
+        direction: Direction {fi: 180}
+    };
+    let legs = vec![leg_1, leg_2, leg_3, leg_4];
+    
+    let sensor_1 = Sensor {
+        typeofsensor: TypeOfSensor::Light,
+        direction: Direction {fi: 0}
+    };
+    let sensor_2 = Sensor {
+        typeofsensor: TypeOfSensor::Light,
+        direction: Direction {fi: 90}
+    };
+    let sensor_3 = Sensor {
+        typeofsensor: TypeOfSensor::Light,
+        direction: Direction {fi: 180}
+    };
+    let sensor_4 = Sensor {
+        typeofsensor: TypeOfSensor::Light,
+        direction: Direction {fi: 270}
+    };
+    let sensors = vec![sensor_1, sensor_2, sensor_3, sensor_4];
+    
+    let position = Point{
+        x: 100.0,
+        y: 200.0,
+    };
+    
+    let start_energy = 100;
+    
+    Osobj::new(
+        position, 
+        brain,
+        environment,
+        sensors,
+        legs,
+        start_energy
+    )
+
 }

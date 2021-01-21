@@ -36,76 +36,66 @@ mod common;
 mod neuronet;
 mod osobi;
 
-use common::{Coordinates, Direction};
-use osobi::Osobj;
+use common::Point;
+// use osobi::Osobj;
 
 // источник энергии
 struct EnergySource {
-    coordinate: Coordinates,
-    power: i32,
+    position: Point,
+    power: f32,
 }
 
-fn create_sol() -> EnergySource {
+impl EnergySource {
 
-    let coordinate = Coordinates{
-        x: 0,
-        y: 0,
-        z: 0,
+    fn shine_at_point(&self, p:Point) -> (f32, f32){
+    
+        let dx = self.position.x - p.x;
+        let dy = self.position.y - p.y;
+        let r_sqr = dx*dx + dy*dy; // квадрат расстояния
+        let r = r_sqr.sqrt();
+        
+        // в двумерном мире мощность света обратно пропорциональна расстоянию,
+        // при переходе на трехмерный мир переделать на квадрат расстояния
+        let power_at_point = self.power / r;
+        
+        // эту величину раскладываю на проекции по осям
+        (power_at_point * dx / r, power_at_point * dy / r)
+        
+    }
+}
+
+fn sample_sol() -> EnergySource {
+
+    let position = Point{
+        x: 0.0,
+        y: 0.0,
+//         z: 0,
     };
     
     EnergySource {
-        coordinate: coordinate,
-        power: 1000,
+        position: position,
+        power: 10000.0,
     }
     
 }
 
-// impl EnergySource {
-//     fn new(x: f32, y: f32, z: f32, energy: f32) -> EnergySource{
-//         EnergySource
-//     }
+// // источник яда
+// struct PoisonSource {
+//     position: Point,
+//     energy: f32,
 // }
-
-// источник яда
-struct PoisonSource {
-    coordinate: Coordinates,
-    energy: f32,
-}
 
 fn main() {
 
-    let coordinate = Coordinates{
-        x: 10,
-        y: 20,
-        z: 15,
-    };
+    let sol = sample_sol();
+    let mut osobj = osobi::sample_osobj();
     
-    let mut osobj = Osobj::new(
-        coordinate, 
-        osobi::simple_brain(),
-        osobi::simple_sensors(),
-        osobi::simple_legs(),
-        100
-    );
-
-//     let light1 = EnergySource{
-//         coordinate: Coordinates{
-//             x: 0.0,
-//             y: 0.0,
-//             z: 0.0,
-//         },
-//         energy: 100.0
-//     };
-//     
-//     let mut nloop = 0;
-//     loop {
-//         nloop = nloop + 1;
-//         if nloop > 1000 {
-//             break
-//         }
-//         
-//         
-//     };
+    for _i in 0..1 {
+        
+        let (shine_x, shine_y) = sol.shine_at_point(osobj.position);
+        println!("{} {}", shine_x, shine_y);
+        
+    }
     
 
 }
