@@ -47,7 +47,7 @@ struct EnergySource {
 
 impl EnergySource {
 
-    fn force_from_point(&self, p:Point) -> Force{
+    fn force_at_point(&self, p:Point) -> Force{
     
         let dx = p.x - self.position.x;
         let dy = p.y - self.position.y;
@@ -55,14 +55,21 @@ impl EnergySource {
         let r = r_sqr.sqrt();
         
         let mut fi = (dy / r).asin() 
-            * 180.0/std::f32::consts::PI // перевод в градусы
-            - 180.0;    // разворот в противоположную сторону: 
+            * 180.0/std::f32::consts::PI; // перевод в градусы
+            //- 180.0;    // разворот в противоположную сторону: 
                         // полученный вектор смотрит от точки p на источник света;
                         // так удобнее рассчитывать освещенность сенсоров
-            
-        if fi < 0.0 {
-            fi = fi + 360.0;
+                        
+        if dy < 0.0 && dx < 0.0 { 
+            fi = -180.0 - fi
+        }else if dy > 0.0 && dx < 0.0 {
+            fi = 180.0 - fi
         }
+        
+            
+//         if fi < 0.0 {
+//             fi = fi + 360.0;
+//         }
         
         Force{ 
             // в двумерном мире мощность света обратно пропорциональна расстоянию,
@@ -97,38 +104,61 @@ fn sample_sol() -> EnergySource {
 //     energy: f32,
 // }
 
-fn main() {
-
-//     osobi::test_memory_find_near();
-
-     let sol = sample_sol();
-     let mut osobj = osobi::sample_osobj();
+#[allow(dead_code)]
+fn test_signal_on_sensors() {
+    
+    let sol = sample_sol();
+    let mut osobj = osobi::sample_osobj();
      
-     osobj.position.y = -100.0;
+    osobj.position.y = -100.0;
      
-     while osobj.position.x > -100.0 {
+    while osobj.position.x > -120.0 {
      
-        let sol_force_at_osobj = sol.force_from_point(osobj.position);
+        let sol_force_at_osobj = sol.force_at_point(osobj.position);
         println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
-//         print!("сигнал на сенсорах: ");
+        print!("сигнал на сенсорах: ");
         for sensor in osobj.sensors.iter() {
-            let signal_at_sensor = sensor.signal_at_sensor(sol_force_at_osobj);
-            println!("сигнал: {} ", signal_at_sensor);
+            let signal_at_sensor = sensor.signal_on_sensor(&sol_force_at_osobj);
+            print!("{} ", signal_at_sensor);
         }
-//         println!("");
+        println!("");
         
-        osobj.position.x = osobj.position.x - 10.0
+        osobj.position.x = osobj.position.x - 20.0
+    
+    }
+
+    osobj.position.x = 100.0;
+    osobj.position.y = 100.0;
+     
+    while osobj.position.x > -120.0 {
+     
+        let sol_force_at_osobj = sol.force_at_point(osobj.position);
+        println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
+        print!("сигнал на сенсорах: ");
+        for sensor in osobj.sensors.iter() {
+            let signal_at_sensor = sensor.signal_on_sensor(&sol_force_at_osobj);
+            print!("{} ", signal_at_sensor);
+        }
+        println!("");
+        
+        osobj.position.x = osobj.position.x - 20.0
         
     }
-//      println!("Величина сигнала на сенсорах {}", )
     
-//     let mut x:f32 = 0.0;
-//     let pi = std::f32::consts::PI;
-//     println!("arcsin({}) = {}", x, x.asin()*180.0/pi);
-//     x = 1.0;
-//     println!("arcsin({}) = {}", x, x.asin()*180.0/pi);
-//     x = -1.0;
-//     println!("arcsin({}) = {}", x, x.asin()*180.0/pi);
-     
+}
+
+
+fn main() {
+
+    // test_signal_on_sensors();
+    
+    let sol = sample_sol();
+    let mut osobj = osobi::sample_osobj();
+    
+    let sol_force_at_osobj = sol.force_at_point(osobj.position);
+    println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
+    
+    let signals = osobj.signal_on_sensors(vec![sol_force_at_osobj]);
+    println!("сигнал на сенсорах {:?}", signals);
 
 }

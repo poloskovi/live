@@ -16,7 +16,7 @@
 // Или так:
 
 use crate::common::{Point, Direct, Force};
-use crate::neuronet::{Matrix, Neuronet};
+use crate::neuronet::{Tdata, Matrix, Neuronet};
 
 pub enum TypeOfSensor {
     Light,
@@ -31,25 +31,18 @@ pub struct Sensor {
 }
 
 impl Sensor {
-    pub fn signal_at_sensor(&self, force: Force) -> f32 {
 
-//         todo!("")
-
+    pub fn signal_on_sensor(&self, force: &Force) -> f32 {
         // угол между осью сенсора и источником сигнала
-        let delta_angle = - self.direct.delta(force.direct);
-//         println!("delta_angle={}", delta_angle);
+        let delta_angle = - self.direct.delta(force.direct.revers());
+        
         // сенсор видит сигнал, если направлен в ту же полусферу, откуда приходит сигнал
-//         if delta_angle > 90.0 || delta_angle < -90.0 {
-//             0.0
-//         }else{
-        println!("delta_angle = {}", delta_angle);
         let signal = (delta_angle * std::f32::consts::PI / 180.0).cos() * force.f;
         if signal < 0.0 {
             0.0
         }else{
             signal
         }
-        
     }
 }
 
@@ -280,33 +273,26 @@ impl Osobj {
         // корень кубический из массы
         todo!("сделать вычисление корня кубического")
     }
+    
+    pub fn signal_on_sensors(&self, forces: Vec<Force>) -> Vec<Tdata> {
+        let mut result = Vec::<Tdata>::new();
+        for sensor in self.sensors.iter() {
+            let mut signal = 0.0;
+            for force in forces.iter() {
+                signal = signal + sensor.signal_on_sensor(force);
+            }
+            result.push(signal as Tdata);
+        }
+        result
+    }
 
-//     fn force_from_point(&self, force: Force) -> Force{
-//     
-//         let dx = self.position.x - force.position.x;
-//         let dy = self.position.y - force.position.y;
-//         let r_sqr = dx*dx + dy*dy; // квадрат расстояния
-//         let r = r_sqr.sqrt();
-//         
-//         let mut fi = (dx / r).asin() * 180.0/std::f32::consts::PI;
-// //         if dx < 0.0 {
-// //             fi = fi - 180.0;
-// //         }
-//         
-//         if fi < 0.0 {
-//             fi = fi + 360.0;
+    // подача сигнала с сенсоров на вход нейросети
+    pub fn sensors_to_brain(&mut self){
+//         let mut inputdata = net::Matrix::new(1, self.sensors.len());
+//         for i in 0..self.sensors.len() {
+//             inputdata.set(0, i, self.sensors[i]
 //         }
-//         
-//         Force{ 
-//             // в двумерном мире мощность света обратно пропорциональна расстоянию,
-//             // при переходе на трехмерный мир переделать на квадрат расстояния
-//             f: force.power / r, 
-//             direct: Direct{ 
-//                 fi: fi
-//             },
-//         }
-//         
-//     }
+    }
     
 }
 

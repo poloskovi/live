@@ -51,6 +51,18 @@ impl Direct{
         }
     
     }
+    
+    //противоположное направление
+    pub fn revers(&self) -> Direct{
+        let mut fi = self.fi-180.0;
+        if fi < 0.0{
+            fi = fi + 360.0;
+        }
+        Direct {
+            fi: fi,
+        }
+    }
+    
     // угол между направлениями
     pub fn delta(&self, other: Direct) -> f32{
         self.fi - other.fi

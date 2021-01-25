@@ -2,8 +2,8 @@ extern crate rand;
 use rand::Rng;
 use std::fmt;
 
-type Tdata = i32;
-const FORMFACTOR: i32 = 256;
+pub type Tdata = i32;
+pub const FORMFACTOR: i32 = 256;
 // хвосты сигма-функции, чтобы не вырождалась нейросеть
 const TAIL_DOWN: i32 = 4;
 const TAIL_UP: i32 = FORMFACTOR - TAIL_DOWN;
