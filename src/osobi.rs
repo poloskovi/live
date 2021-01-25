@@ -15,7 +15,7 @@
 //          Если оно хуже образца, образцу добавляется вес.
 // Или так:
 
-use crate::common::{Point, Direction};
+use crate::common::{Point, Direct, Force};
 use crate::neuronet::{Matrix, Neuronet};
 
 pub enum TypeOfSensor {
@@ -27,12 +27,35 @@ pub enum TypeOfSensor {
 pub struct Sensor {
     typeofsensor: TypeOfSensor,
     // направление сенсора
-    direction: Direction,
+    direct: Direct,
+}
+
+impl Sensor {
+    pub fn signal_at_sensor(&self, force: Force) -> f32 {
+
+//         todo!("")
+
+        // угол между осью сенсора и источником сигнала
+        let delta_angle = - self.direct.delta(force.direct);
+//         println!("delta_angle={}", delta_angle);
+        // сенсор видит сигнал, если направлен в ту же полусферу, откуда приходит сигнал
+//         if delta_angle > 90.0 || delta_angle < -90.0 {
+//             0.0
+//         }else{
+        println!("delta_angle = {}", delta_angle);
+        let signal = (delta_angle * std::f32::consts::PI / 180.0).cos() * force.f;
+        if signal < 0.0 {
+            0.0
+        }else{
+            signal
+        }
+        
+    }
 }
 
 // Орган движения. Сила всегда равна 1.
 pub struct Leg {
-    direction: Direction,
+    direct: Direct,
 }
 
 // Ячейка памяти особи
@@ -45,30 +68,103 @@ struct MemoryCell {
     weight: u32,
 }
 
-struct Memory {
+pub struct Memory {
     cells: Vec<MemoryCell>,
 }
 
 impl Matrix {
     // "расстояние" между векторами
     // разница между наборами входных сигналов
-    fn distantion(&self, other:&Matrix) -> u32{
-        todo!("")
+    fn distance(&self, other:&Matrix) -> i32{
+    
+        Matrix::panic_if_not_same_size(self, other);
+
+        let mut result = 0;
+        for row in 0..self.nrow {
+            for col in 0..self.ncol {
+                let d = self.get(row,col) - other.get(row,col);
+                result = result + d*d;
+            }
+        }
+        result
     }
 }
 
 impl Memory{
+
     fn new() -> Memory {
         Memory{
             cells: Vec::<MemoryCell>::new(),
         }
     }
+    
+    fn add(&mut self, input: Matrix, output: Matrix, delta_energy: i16){
+        let memorycell = MemoryCell{
+            input: input,
+            output: output,
+            delta_energy: delta_energy,
+            weight: 0,
+        };
+        self.cells.push(memorycell);
+    }
+    
     // найти ближайший образец.
     // возвращает индекс ячейки памяти
-    fn find_nearest(&self, input: &Matrix) -> Option<&MemoryCell>{
-        self.cells.iter().min_by_key(|p| p.input.dist(input))
-        // todo!("")
+    fn find_near(&self, input: &Matrix) -> Option<(usize, i32)>{
+//     Option<&MemoryCell>{
+
+//         рабочий код для возврата индекса ближайшего вектора
+//         self.cells
+//             .iter()
+//             .enumerate()
+//             .min_by_key(|(_idx, p)| p.input.distanсе(input))
+//             .map(|(idx, _val)| idx)
+            
+        // Мне надо получить индекс ближайшего вектора и величину дистанции.
+        self.cells
+            .iter()
+            .map(|p| p.input.distance(input))
+            .enumerate()
+            .min_by_key(|(_idx, p)| *p)
+            
     }
+    
+}
+
+pub fn test_memory_find_near(){
+    
+    let mut memory = Memory::new();
+    
+    let input = Matrix::new_rand(1, 4, 0, 10, false);
+    println!(" 0: {}", &input);
+    let output = Matrix::new(1, 4);
+    memory.add(input, output, 0);
+//     
+//     let input = Matrix::new_rand(1, 4, 0, 255, false);
+//     println!(" 1: {}", &input);
+//     let output = Matrix::new(1, 4);
+//     memory.add(input, output, 0);
+//     
+//     let input = Matrix::new_rand(1, 4, 0, 20, false);
+//     println!(" 2: {}", &input);
+//     let output = Matrix::new(1, 4);
+//     memory.add(input, output, 0);
+//     
+//     let input = Matrix::new_rand(1, 4, 0, 30, false);
+//     println!(" 3: {}", &input);
+//     let output = Matrix::new(1, 4);
+//     memory.add(input, output, 0);
+    
+    let input = Matrix::new_rand(1, 4, 0, 255, false);
+    println!(" n: {}", &input);
+    
+    let result = memory.find_near(&input);
+//     println!("ближайшее: {}", index);
+    match result {
+        Some(x) => println!("ближайшее: индекс {}, расстояние {}", x.0, x.1),//&x.input),
+        None    => println!("ближайшего элемента нет..."),
+    }    
+    
 }
 
 // особь
@@ -79,28 +175,31 @@ pub struct Osobj {
     
     // направление (от направления особи завивит направление обзора сенсора)
     //      сделать потом
-    // direction: common::Direction,
+    // direct: common::Direct,
     
     // Нейросеть рецепторы-органы движения
     brain: Neuronet,
     
-    // Единая нейросеть: Вход (сигнал на рецепторах) - анализатор - органы движения - окружающая среда - изменение целевой функции 
+    // Единая нейросеть: 
+    // Вход (сигнал на рецепторах) - анализатор - органы движения - окружающая среда - изменение целевой функции 
     // (в простейшем случае целевая функция - это накопление энергии)
-    //      Нет, так нельзя. Нейросеть окружающей среды должна иметь на входе и движение ног, и значения параметров окружающей среды, 
-    //      полученные через сенсоры.
-    //      Кроме того, непонятно, что есть целевая функция. Стремиться к какой-то цифре? Но вдалеке от источника света ее не достичь
-    //      Вариант с памятью лучше, так как на примерно одинаковых входных значениях выбирается движение, дающее максимальный прирост 
+    //      Нет, так нельзя. Нейросеть окружающей среды должна иметь на входе и движение ног, 
+    //      и значения параметров окружающей среды, полученные через сенсоры.
+    //      Кроме того, непонятно, что есть целевая функция. Стремиться к какой-то цифре? 
+    //      Но вдалеке от источника света ее не достичь
+    //      Вариант с памятью лучше, так как на примерно одинаковых входных значениях 
+    //      выбирается движение, дающее максимальный прирост 
     //      целевой функции для данных условий
     //      
-    //brain_and_env: Neuronet,
+    // brain_and_env: Neuronet,
     
     // позиция органов движения в нейросети
-    //pos_legs: usize,
+    // pos_legs: usize,
     
     // Сенсоры, получают информацию из окружающей среды и передают на вход нейросети
     // индекс сенсора равен индексу входного слоя нейросети
     // Количество ячеек во входном слое определяется количеством сенсоров.
-    sensors: Vec<Sensor>,
+    pub sensors: Vec<Sensor>,
     
     // "Ноги", дают толчок к перемещению. Фактическое перемещение равно сумме векторов ног, деленное на массу особи.
     legs: Vec<Leg>,
@@ -116,10 +215,11 @@ pub struct Osobj {
     // Линейный размер, корень кубический из массы.
     // Влияет на минимальное расстояние между особями
     //      сделать потом
-    //size: u32,
+    // size: u32,
     
     // Память состояний
-    memory: Memory
+    memory: Memory,
+    max_memory_cells: usize,
     
     // Попробуем вместо памяти состояний использовать расчет "нейросети" окружаюющей среды
     //environment: Neuronet,
@@ -127,12 +227,15 @@ pub struct Osobj {
 
 impl Osobj {
     
-    pub fn new(position: Point, 
+    pub fn new(
+        position: Point, 
         brain: Neuronet, 
-        environment: Neuronet, 
+        memory: Memory,
+        max_memory_cells: usize,
         sensors: Vec<Sensor>, 
         legs: Vec<Leg>, 
-        energy: u32) -> Osobj {
+        energy: u32
+        ) -> Osobj {
     
         // количество органов движения равно количеству выходов нейросети
         let n_legs = brain.n_outputs();
@@ -149,12 +252,11 @@ impl Osobj {
         let mut osobj = Osobj{
             position: position,
             brain: brain,
-            environment: environment,
+            max_memory_cells: max_memory_cells,
+            memory: memory,
             sensors: sensors,
             legs: legs,
             energy: energy,
-            //memory: Memory::new(),
-            // direction: common::Direction::random(),
             massa: 0,
         };
         
@@ -179,6 +281,33 @@ impl Osobj {
         todo!("сделать вычисление корня кубического")
     }
 
+//     fn force_from_point(&self, force: Force) -> Force{
+//     
+//         let dx = self.position.x - force.position.x;
+//         let dy = self.position.y - force.position.y;
+//         let r_sqr = dx*dx + dy*dy; // квадрат расстояния
+//         let r = r_sqr.sqrt();
+//         
+//         let mut fi = (dx / r).asin() * 180.0/std::f32::consts::PI;
+// //         if dx < 0.0 {
+// //             fi = fi - 180.0;
+// //         }
+//         
+//         if fi < 0.0 {
+//             fi = fi + 360.0;
+//         }
+//         
+//         Force{ 
+//             // в двумерном мире мощность света обратно пропорциональна расстоянию,
+//             // при переходе на трехмерный мир переделать на квадрат расстояния
+//             f: force.power / r, 
+//             direct: Direct{ 
+//                 fi: fi
+//             },
+//         }
+//         
+//     }
+    
 }
 
 // простейший мозг: один сенсор, один выход, один скрытый слой
@@ -189,14 +318,14 @@ pub fn simple_brain() -> Neuronet{
 pub fn simple_sensors() -> Vec<Sensor> {
     let sensor = Sensor{
         typeofsensor: TypeOfSensor::Light,
-        direction: Direction::random(),
+        direct: Direct::random(),
     };
     vec![sensor,]
 }
 
 pub fn simple_legs() -> Vec<Leg> {
     let leg = Leg{
-        direction: Direction::random(),
+        direct: Direct::random(),
     };
     vec![leg,]
 }
@@ -208,51 +337,54 @@ pub fn sample_osobj() -> Osobj{
     let count_of_sensors = 4;
 
     let brain = Neuronet::new(vec![count_of_sensors, 10, 10, count_of_leg]);
-    let environment = Neuronet::new(vec![count_of_leg, 10, 10, count_of_sensors]);
+//     let environment = Neuronet::new(vec![count_of_leg, 10, 10, count_of_sensors]);
+    let memory = Memory::new();
     
     let leg_1 = Leg{
-        direction: Direction {fi: 270}
+        direct: Direct{fi: 270.0}
     };
     let leg_2 = Leg{
-        direction: Direction {fi: 0}
+        direct: Direct{fi: 0.0}
     };
     let leg_3 = Leg{
-        direction: Direction {fi: 90}
+        direct: Direct{fi: 90.0}
     };
     let leg_4 = Leg{
-        direction: Direction {fi: 180}
+        direct: Direct{fi: 180.0}
     };
     let legs = vec![leg_1, leg_2, leg_3, leg_4];
     
     let sensor_1 = Sensor {
         typeofsensor: TypeOfSensor::Light,
-        direction: Direction {fi: 0}
+        direct: Direct{fi: 0.0}
     };
     let sensor_2 = Sensor {
         typeofsensor: TypeOfSensor::Light,
-        direction: Direction {fi: 90}
+        direct: Direct{fi: 90.0}
     };
     let sensor_3 = Sensor {
         typeofsensor: TypeOfSensor::Light,
-        direction: Direction {fi: 180}
+        direct: Direct{fi: 180.0}
     };
     let sensor_4 = Sensor {
         typeofsensor: TypeOfSensor::Light,
-        direction: Direction {fi: 270}
+        direct: Direct{fi: 270.0}
     };
     let sensors = vec![sensor_1, sensor_2, sensor_3, sensor_4];
     
     let position = Point{
         x: 100.0,
-        y: 200.0,
+        y: -200.0,
     };
     
     let start_energy = 100;
+    let max_memory_cells = 10;
     
     Osobj::new(
         position, 
         brain,
-        environment,
+        memory,
+        max_memory_cells,
         sensors,
         legs,
         start_energy
