@@ -16,7 +16,7 @@
 // Или так:
 
 use crate::common::{Point, Direct, Force};
-use crate::neuronet::{Tdata, Matrix, Neuronet};
+use crate::neuronet::{Tdata, Matrix, Neuronet, Sigmoida};
 
 pub enum TypeOfSensor {
     Light,
@@ -285,15 +285,11 @@ impl Osobj {
         }
         result
     }
-
-    // подача сигнала с сенсоров на вход нейросети
-    pub fn sensors_to_brain(&mut self){
-//         let mut inputdata = net::Matrix::new(1, self.sensors.len());
-//         for i in 0..self.sensors.len() {
-//             inputdata.set(0, i, self.sensors[i]
-//         }
-    }
     
+    pub fn get_brain_output(&self, input: &Matrix, sigmoida: &Sigmoida) -> Matrix {
+        self.brain.getoutput(input, sigmoida)
+    }
+
 }
 
 // простейший мозг: один сенсор, один выход, один скрытый слой

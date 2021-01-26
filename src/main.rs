@@ -152,13 +152,20 @@ fn main() {
 
     // test_signal_on_sensors();
     
+    let sigmoida = neuronet::Sigmoida::new();
+    
     let sol = sample_sol();
     let mut osobj = osobi::sample_osobj();
     
     let sol_force_at_osobj = sol.force_at_point(osobj.position);
     println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
     
-    let signals = osobj.signal_on_sensors(vec![sol_force_at_osobj]);
-    println!("сигнал на сенсорах {:?}", signals);
+    let signal = osobj.signal_on_sensors(vec![sol_force_at_osobj]);
+    println!("сигнал на сенсорах {:?}", signal);
+    let input = neuronet::Matrix::vec_to_matrix(signal);
+    println!("входной сигнал нейросети {}", input);
+    let output = osobj.get_brain_output(&input, &sigmoida);
 
+    println!("выходной сигнал нейросети {}", output);
+    
 }

@@ -239,6 +239,14 @@ impl Matrix{
     pub fn count_of_cells(&self) -> usize {
         self.nrow * self.ncol
     }
+    
+    pub fn vec_to_matrix(vector: Vec<Tdata>) -> Matrix{
+        let mut result = Matrix::new(1, vector.len());
+        for (i, value) in vector.iter().enumerate() {
+            result.set(0, i, *value)
+        }
+        result
+    }
 
 }
 
