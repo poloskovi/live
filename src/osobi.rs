@@ -16,7 +16,7 @@
 // Или так:
 
 use crate::common::{Point, Direct, Force};
-use crate::neuronet::{Tdata, Matrix, Neuronet, Sigmoida};
+use crate::neuronet::{Tdata, FORMFACTOR, Matrix, Neuronet, Sigmoida};
 
 pub enum TypeOfSensor {
     Light,
@@ -56,7 +56,7 @@ struct MemoryCell {
     input: Matrix,
     output: Matrix,
     // изменение энергии на этом образце
-    delta_energy: i16,
+    delta_energy: f32,
     // количество истинных срабатываний, когда образец из ячейки работал лучше измененного
     weight: u32,
 }
@@ -91,7 +91,7 @@ impl Memory{
         }
     }
     
-    fn add(&mut self, input: Matrix, output: Matrix, delta_energy: i16){
+    fn add(&mut self, input: Matrix, output: Matrix, delta_energy: f32){
         let memorycell = MemoryCell{
             input: input,
             output: output,
@@ -131,7 +131,7 @@ pub fn test_memory_find_near(){
     let input = Matrix::new_rand(1, 4, 0, 10, false);
     println!(" 0: {}", &input);
     let output = Matrix::new(1, 4);
-    memory.add(input, output, 0);
+    memory.add(input, output, 0.0);
 //     
 //     let input = Matrix::new_rand(1, 4, 0, 255, false);
 //     println!(" 1: {}", &input);
@@ -200,10 +200,10 @@ pub struct Osobj {
     // накопленная энергия. 
     // Если energy >= massa, тогда происходит деление
     // Если energy <= 0, то особь погибает
-    energy: u32,
+    pub energy: f32,
     
     // Масса, равна сумме клеток мозга
-    massa: u32,
+    massa: f32,
     
     // Линейный размер, корень кубический из массы.
     // Влияет на минимальное расстояние между особями
@@ -227,7 +227,7 @@ impl Osobj {
         max_memory_cells: usize,
         sensors: Vec<Sensor>, 
         legs: Vec<Leg>, 
-        energy: u32
+        energy: f32
         ) -> Osobj {
     
         // количество органов движения равно количеству выходов нейросети
@@ -250,7 +250,7 @@ impl Osobj {
             sensors: sensors,
             legs: legs,
             energy: energy,
-            massa: 0,
+            massa: 0.0,
         };
         
         osobj.massa = osobj.count_massa();
@@ -261,10 +261,10 @@ impl Osobj {
     }
 
     // добавить "массу" памяти
-    fn count_massa(&self) -> u32 {
-        let mut massa = self.brain.count_of_connection() as u32;
-        if massa == 0 {
-            massa = 1;
+    fn count_massa(&self) -> f32 {
+        let mut massa = self.brain.count_of_connection() as f32;
+        if massa == 0.0 {
+            massa = 1.0;
         }
         massa
     }
@@ -286,8 +286,49 @@ impl Osobj {
         result
     }
     
+    // выходной сигнал нейросети
     pub fn get_brain_output(&self, input: &Matrix, sigmoida: &Sigmoida) -> Matrix {
         self.brain.getoutput(input, sigmoida)
+    }
+    
+    // сумма вектора усилий ног в результате команды нейросети
+    pub fn common_force(&mut self, brain_output: &Matrix) -> Force {
+    
+        // нужно сложить векторы усилий ног
+        let mut forces = Vec::<Force>::new();
+        for (i, value) in self.legs.iter().enumerate() {
+//             println!("{} {} {}", i, brain_output.get(0, i), value.direct);
+            forces.push(
+                Force{
+                    f: 1.0 * // сила каждой ноги = 1
+                        brain_output.get(0, i) as f32 / (FORMFACTOR as f32)
+                        // максимальный сигнал на выходе нейросети дает усилие = 1
+                    ,
+                    direct: value.direct,
+                }
+            );
+            
+        }
+        Force::common_force(&forces)
+
+    }
+    
+    pub fn movement(&mut self, force: Force) {
+        
+        // длина перемещения
+        let koeff = 100.0; // коэффициент, подобрать экспериментально
+        let r = force.f * 100.0 / self.massa;
+        self.position.movement(r, force.direct);
+        
+        // ограничение "аквариума"
+        // переделать на функцию "мира" (сделать объект "мир")
+        if self.position.y > -50.0 {
+            self.position.y = -50.0;
+        }
+    }
+    
+    pub fn change_energy(&mut self, sol_force: f32){
+        self.energy = self.energy + sol_force;
     }
 
 }
@@ -323,16 +364,16 @@ pub fn sample_osobj() -> Osobj{
     let memory = Memory::new();
     
     let leg_1 = Leg{
-        direct: Direct{fi: 270.0}
+        direct: Direct{fi:0.0}
     };
     let leg_2 = Leg{
-        direct: Direct{fi: 0.0}
+        direct: Direct{fi: 9.0}
     };
     let leg_3 = Leg{
-        direct: Direct{fi: 90.0}
+        direct: Direct{fi: 180.0}
     };
     let leg_4 = Leg{
-        direct: Direct{fi: 180.0}
+        direct: Direct{fi: 270.0}
     };
     let legs = vec![leg_1, leg_2, leg_3, leg_4];
     
@@ -359,7 +400,7 @@ pub fn sample_osobj() -> Osobj{
         y: -200.0,
     };
     
-    let start_energy = 100;
+    let start_energy = 100.0;
     let max_memory_cells = 10;
     
     Osobj::new(

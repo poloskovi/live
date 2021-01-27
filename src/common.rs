@@ -21,6 +21,40 @@ impl Point{
         let dy = p2.y - p1.y;
         (dx*dx + dy*dy).sqrt()
     }
+    // перевод в декартову систему координат
+    pub fn polar_to_decart(r: f32, direct: Direct) -> Point {
+        let angle_radian = direct.fi * std::f32::consts::PI / 180.0;
+        Point{
+            x: angle_radian.cos() * r,
+            y: angle_radian.sin() * r,
+        }
+    }
+    // перевод в полярную систему координат
+    pub fn to_polar(&self) -> (f32, Direct) {
+    
+        let r_sqr = self.x*self.x + self.y*self.y;
+        let r = r_sqr.sqrt();
+        
+        let mut fi = (self.y / r).asin() 
+            * 180.0/std::f32::consts::PI; // перевод в градусы
+                        
+        if self.y < 0.0 && self.x < 0.0 { 
+            fi = -180.0 - fi
+        }else if self.y > 0.0 && self.x < 0.0 {
+            fi = 180.0 - fi
+        }
+        
+        ( r, 
+            Direct{
+                fi: fi,
+            }
+        )
+    }
+    pub fn movement(&mut self, r: f32, direct: Direct){
+        let delta = Point::polar_to_decart(r, direct);
+        self.x = self.x + delta.x;
+        self.y = self.y + delta.y;
+    }
 }
 
 #[allow(dead_code)]
@@ -67,6 +101,7 @@ impl Direct{
     pub fn delta(&self, other: Direct) -> f32{
         self.fi - other.fi
     }
+    
 }
 
 #[allow(dead_code)]
@@ -81,6 +116,28 @@ pub struct Force{
     pub f: f32,
     pub direct: Direct,
     //pub z: i32,
+}
+
+impl Force{
+    // результирующая сила (сумма векторов сил)
+    pub fn common_force(forces: &Vec::<Force>) -> Force {
+        let mut fx = 0.0;
+        let mut fy = 0.0;
+        for force in forces.iter() {
+            let p = Point::polar_to_decart(force.f, force.direct);
+            fx = fx + p.x;
+            fy = fy + p.y;
+        }
+        let (f, direct) = Point{
+            x: fx,
+            y: fy,
+        }.to_polar();
+        
+        Force{
+            f: f,
+            direct: direct,
+        }
+    }
 }
 
 #[allow(dead_code)]

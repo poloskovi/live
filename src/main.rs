@@ -36,7 +36,7 @@ mod common;
 mod neuronet;
 mod osobi;
 
-use common::{Point, Direct, Force};
+use common::{Point, Force};
 // use osobi::Osobj;
 
 // источник энергии
@@ -51,33 +51,17 @@ impl EnergySource {
     
         let dx = p.x - self.position.x;
         let dy = p.y - self.position.y;
-        let r_sqr = dx*dx + dy*dy; // квадрат расстояния
-        let r = r_sqr.sqrt();
         
-        let mut fi = (dy / r).asin() 
-            * 180.0/std::f32::consts::PI; // перевод в градусы
-            //- 180.0;    // разворот в противоположную сторону: 
-                        // полученный вектор смотрит от точки p на источник света;
-                        // так удобнее рассчитывать освещенность сенсоров
-                        
-        if dy < 0.0 && dx < 0.0 { 
-            fi = -180.0 - fi
-        }else if dy > 0.0 && dx < 0.0 {
-            fi = 180.0 - fi
-        }
-        
-            
-//         if fi < 0.0 {
-//             fi = fi + 360.0;
-//         }
+        let (r, direct) = Point{
+            x: dx,
+            y: dy,
+        }.to_polar();
         
         Force{ 
             // в двумерном мире мощность света обратно пропорциональна расстоянию,
             // при переходе на трехмерный мир переделать на квадрат расстояния
             f: self.power / r, 
-            direct: Direct{ 
-                fi: fi
-            },
+            direct: direct,
         }
         
     }
@@ -156,16 +140,34 @@ fn main() {
     
     let sol = sample_sol();
     let mut osobj = osobi::sample_osobj();
+    let mut prev_energy = osobj.energy;
     
-    let sol_force_at_osobj = sol.force_at_point(osobj.position);
+    let mut sol_force_at_osobj = sol.force_at_point(osobj.position);
     println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
+   
+    for i in 0..10 {
     
-    let signal = osobj.signal_on_sensors(vec![sol_force_at_osobj]);
-    println!("сигнал на сенсорах {:?}", signal);
-    let input = neuronet::Matrix::vec_to_matrix(signal);
-    println!("входной сигнал нейросети {}", input);
-    let output = osobj.get_brain_output(&input, &sigmoida);
-
-    println!("выходной сигнал нейросети {}", output);
+        let signal = osobj.signal_on_sensors(vec![sol_force_at_osobj]);
+        println!("сигнал на сенсорах {:?}", signal);
+    
+        let input = neuronet::Matrix::vec_to_matrix(signal);
+        // println!("входной сигнал нейросети {}", input);
+    
+        let brain_output = osobj.get_brain_output(&input, &sigmoida);
+        // println!("выходной сигнал нейросети {}", brain_output);
+    
+        let common_force = osobj.common_force(&brain_output);
+        println!("сумма вектора усилий ног {}", common_force);
+    
+        osobj.movement(common_force);
+        sol_force_at_osobj = sol.force_at_point(osobj.position);
+        println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
+    
+        osobj.change_energy(sol_force_at_osobj.f);
+        println!("Изменение энергии {}", osobj.energy - prev_energy);
+        
+        prev_energy = osobj.energy;
+        
+    }
     
 }
