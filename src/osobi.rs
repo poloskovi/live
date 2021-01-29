@@ -52,17 +52,18 @@ pub struct Leg {
 }
 
 // Ячейка памяти особи
-struct MemoryCell {
-    input: Matrix,
-    output: Matrix,
-    // изменение энергии на этом образце
-    delta_energy: f32,
-    // количество истинных срабатываний, когда образец из ячейки работал лучше измененного
-    weight: u32,
+pub struct MemoryCell {
+    pub input: Matrix,
+    pub output: Matrix,
+    // изменение накопления энергии в результате этой реакции input->output
+    // по сравнению с накоплением энергии на предыдущем шаге
+    pub izm_delta_energy: f32,
+    // проведена тренировка нейросети на этом наборе
+    pub trained: bool,
 }
 
 pub struct Memory {
-    cells: Vec<MemoryCell>,
+    pub cells: Vec<MemoryCell>,
 }
 
 impl Matrix {
@@ -91,14 +92,28 @@ impl Memory{
         }
     }
     
-    fn add(&mut self, input: Matrix, output: Matrix, delta_energy: f32){
+    fn get(&self, index: usize) -> &MemoryCell{
+        &self.cells[index]
+    }
+    
+    fn add(&mut self, input: Matrix, output: Matrix, izm_delta_energy: f32){
         let memorycell = MemoryCell{
             input: input,
             output: output,
-            delta_energy: delta_energy,
-            weight: 0,
+            izm_delta_energy: izm_delta_energy,
+            trained: false,
         };
         self.cells.push(memorycell);
+    }
+    
+    fn replace(&mut self, index: usize, input: Matrix, output: Matrix, izm_delta_energy: f32){
+        let memorycell = MemoryCell{
+            input: input,
+            output: output,
+            izm_delta_energy: izm_delta_energy,
+            trained: false,
+        };
+        self.cells[index] = memorycell;
     }
     
     // найти ближайший образец.
@@ -133,21 +148,6 @@ pub fn test_memory_find_near(){
     let output = Matrix::new(1, 4);
     memory.add(input, output, 0.0);
 //     
-//     let input = Matrix::new_rand(1, 4, 0, 255, false);
-//     println!(" 1: {}", &input);
-//     let output = Matrix::new(1, 4);
-//     memory.add(input, output, 0);
-//     
-//     let input = Matrix::new_rand(1, 4, 0, 20, false);
-//     println!(" 2: {}", &input);
-//     let output = Matrix::new(1, 4);
-//     memory.add(input, output, 0);
-//     
-//     let input = Matrix::new_rand(1, 4, 0, 30, false);
-//     println!(" 3: {}", &input);
-//     let output = Matrix::new(1, 4);
-//     memory.add(input, output, 0);
-    
     let input = Matrix::new_rand(1, 4, 0, 255, false);
     println!(" n: {}", &input);
     
@@ -317,7 +317,7 @@ impl Osobj {
         
         // длина перемещения
         let koeff = 100.0; // коэффициент, подобрать экспериментально
-        let r = force.f * 100.0 / self.massa;
+        let r = force.f * koeff / self.massa;
         self.position.movement(r, force.direct);
         
         // ограничение "аквариума"
@@ -329,6 +329,26 @@ impl Osobj {
     
     pub fn change_energy(&mut self, sol_force: f32){
         self.energy = self.energy + sol_force;
+    }
+    
+    pub fn find_in_memory(&self, input: &Matrix) -> Option<(usize, i32)>{
+        self.memory.find_near(input)
+    }
+    
+    pub fn put_to_memory(&mut self, input: Matrix, output: Matrix, delta_energy: f32){
+        self.memory.add(input, output, delta_energy);
+    }
+    
+    pub fn replace_in_memory(&mut self, index:usize, input: Matrix, output: Matrix, delta_energy: f32){
+        self.memory.replace(index, input, output, delta_energy);
+    }
+    
+    pub fn get_memory_cell(&self, index: usize) -> &MemoryCell{
+        self.memory.get(index)
+    }
+    
+    pub fn brain_training(&mut self, input: &Matrix, output: &Matrix, sigmoida: &Sigmoida){
+        self.brain.training(input, output, sigmoida);
     }
 
 }
@@ -367,7 +387,7 @@ pub fn sample_osobj() -> Osobj{
         direct: Direct{fi:0.0}
     };
     let leg_2 = Leg{
-        direct: Direct{fi: 9.0}
+        direct: Direct{fi: 90.0}
     };
     let leg_3 = Leg{
         direct: Direct{fi: 180.0}
@@ -397,7 +417,7 @@ pub fn sample_osobj() -> Osobj{
     
     let position = Point{
         x: 100.0,
-        y: -200.0,
+        y: -100.0,
     };
     
     let start_energy = 100.0;

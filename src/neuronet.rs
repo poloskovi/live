@@ -247,6 +247,41 @@ impl Matrix{
         }
         result
     }
+    
+    // слегка измененная матрица
+    pub fn modify(&self, procent: f32) -> Matrix{
+        
+        let mut result = Matrix::new(self.nrow, self.ncol);
+        let mut rng = rand::thread_rng();
+        
+        for i in 0..self.nrow {
+            for j in 0..self.ncol {
+                let x = self.get(i,j);
+                let dx_max = (FORMFACTOR as f32 * procent / 100.0) as Tdata;
+                let dx = rng.gen_range(-dx_max, dx_max);
+                let mut x_new = x+dx;
+                if x_new < 0{
+                    x_new = 0;
+                }else if x_new > FORMFACTOR{
+                    x_new = FORMFACTOR;
+                }
+                result.set(i,j, x_new);
+            }
+        }
+        
+        result
+        
+    }
+    
+    pub fn copy(&self) -> Matrix {
+        let mut result = Matrix::new(self.nrow, self.ncol);
+        for row in 0..self.nrow{
+            for col in 0..self.ncol{
+                result.set(row, col, self.get(row, col));
+            }
+        }
+        result
+    }
 
 }
 

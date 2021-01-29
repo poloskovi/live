@@ -140,34 +140,154 @@ fn main() {
     
     let sol = sample_sol();
     let mut osobj = osobi::sample_osobj();
+    
     let mut prev_energy = osobj.energy;
+    let mut delta_energy: f32;
+    let mut prev_delta_energy: Option<f32> = None;
+    let mut izm_delta_energy: f32;
     
     let mut sol_force_at_osobj = sol.force_at_point(osobj.position);
     println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
+    
+    // Я думаю, надо делать так:
+    //  1. Разбить пространство расстояний между векторами входных сигналов Lвх на N частей.
+    //      Вычислить среднее расстояние между частями [dLвх(сред)].
+    //  2. В окрестности каждого состояния пробовать К раз модифицировать выходной сигнал Lвых.
+    //      Определить оптимальный Lвых_опт для максимизации целевой функции (izm_delta_energy).
+    //      Записать (Lвх, Lвых_опт) в память.
+    //  3. Потренировать нейросеть на Lвых(опт), Lвх (несколько раз?)
+    //  4. Потом двигаться на этой нейросети, пока Lвх не удалится от записанных в памяти состояний на [dLвх(сред)]
+    //      В этом случае действовать по схеме 2.
+    //  5?. Если особь переместится в область [dLвх(мин)] << [dLвх(сред)], то еще раз тренировать нейросеть
+    //      на наборе этой ячейки памяти. Чем чаще особь бывает в окрестности записанного состояния, 
+    //      тем лучше нужно быть приспособленным именно к этому состоянию.
+    //  6. В области [dLвх(мин)] << [dLвх(сред)] время от времени еще раз пробовать модифицировать Lвых
    
-    for i in 0..10 {
+    for _i in 0..300 {
+    
+//         println!("");
+//         println!("шаг {}", _i);
     
         let signal = osobj.signal_on_sensors(vec![sol_force_at_osobj]);
-        println!("сигнал на сенсорах {:?}", signal);
+        //println!("сигнал на сенсорах {:?}", signal);
     
         let input = neuronet::Matrix::vec_to_matrix(signal);
         // println!("входной сигнал нейросети {}", input);
-    
-        let brain_output = osobj.get_brain_output(&input, &sigmoida);
-        // println!("выходной сигнал нейросети {}", brain_output);
-    
-        let common_force = osobj.common_force(&brain_output);
-        println!("сумма вектора усилий ног {}", common_force);
-    
-        osobj.movement(common_force);
-        sol_force_at_osobj = sol.force_at_point(osobj.position);
-        println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
-    
-        osobj.change_energy(sol_force_at_osobj.f);
-        println!("Изменение энергии {}", osobj.energy - prev_energy);
         
+        // нужно анализировать изменение прироста энергии
+    
+        let mut in_memory = osobj.find_in_memory(&input);
+        
+        match in_memory {
+            Some(x) => {
+                let index_memory_cell = x.0;
+                let length_to_memory_input = x.1;
+                if length_to_memory_input > 5 {
+                    // отошли далеко от записанных в памяти состояний
+                    // Тренируем нейросеть на последнем состоянии
+                    // вместо последнего состояния пока берем ближайшее
+                    let memory_cell = osobj.get_memory_cell(index_memory_cell);
+                    let input_copy = memory_cell.input.copy();
+                    let output_copy = memory_cell.output.copy();
+                    osobj.brain_training(&input_copy, &output_copy, &sigmoida);
+                    println!("Сеть потренерована на ячейке памяти {}", index_memory_cell);
+                    in_memory = None;
+                }
+            },
+            None => {},
+        }
+        
+        match in_memory {
+            Some(x) => {
+            
+                let index_memory_cell = x.0;
+                let length_to_memory_input = x.1;
+//                 println!("ближайшее: индекс {}, расстояние {}", index_memory_cell, length_to_memory_input);
+                
+                let brain_output;
+                let memory_cell_izm_delta_energy;
+                {
+                    let memory_cell = osobj.get_memory_cell(index_memory_cell);
+                    memory_cell_izm_delta_energy = memory_cell.izm_delta_energy;
+                    brain_output = memory_cell.output.modify(20.0);
+                }
+                //println!("модифицированный выходной сигнал нейросети {}", brain_output);
+                
+                let common_force = osobj.common_force(&brain_output);
+                //println!("сумма вектора усилий ног {}", common_force);
+                
+                osobj.movement(common_force);
+                sol_force_at_osobj = sol.force_at_point(osobj.position);
+//                 println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
+    
+                osobj.change_energy(sol_force_at_osobj.f);
+                
+                delta_energy = osobj.energy - prev_energy;
+                match prev_delta_energy{
+                    Some(x) => {
+                        izm_delta_energy = delta_energy - x;
+//                         println!("Изменение накопления энергии {}", izm_delta_energy);
+                
+                        if izm_delta_energy > memory_cell_izm_delta_energy{
+//                             println!("эта модификация ЛУЧШЕ! {} {}", izm_delta_energy, memory_cell_izm_delta_energy);
+//                             println!(" == Меняем запись в ячейке памяти");
+                            osobj.replace_in_memory(index_memory_cell, input, brain_output, izm_delta_energy);
+                        }else{
+//                             println!("эта модификация хуже... {} {}", izm_delta_energy, memory_cell_izm_delta_energy);
+                        }
+                    },
+                    None =>{},
+                };
+        
+            },
+            None    => {
+            
+//                 println!("ближайшего элемента нет...");
+                
+                let brain_output = osobj.get_brain_output(&input, &sigmoida);
+//                 println!("выходной сигнал нейросети {}", brain_output);
+    
+                let common_force = osobj.common_force(&brain_output);
+//                 println!("сумма вектора усилий ног {}", common_force);
+    
+                osobj.movement(common_force);
+                sol_force_at_osobj = sol.force_at_point(osobj.position);
+//                 println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
+    
+                osobj.change_energy(sol_force_at_osobj.f);
+                
+                delta_energy = osobj.energy - prev_energy;
+                match prev_delta_energy {
+                    Some(x) => {
+                        izm_delta_energy = delta_energy - x;
+//                         println!("Изменение накопления энергии {}", izm_delta_energy);
+                        osobj.put_to_memory(input, brain_output, izm_delta_energy);
+                    },
+                    None => {},
+                };
+        
+            },
+
+        };
+    
+//         println!("delta_energy={}", delta_energy);
+        prev_delta_energy = Some(delta_energy);
         prev_energy = osobj.energy;
-        
+                
+    }
+    
+    osobj.position.x = -100.0;
+    osobj.position.y = -100.0;
+    
+    // тренировка закончена, пускаемся в свободное плавание
+    for i in 0..50 {
+        let signal = osobj.signal_on_sensors(vec![sol_force_at_osobj]);
+        let input = neuronet::Matrix::vec_to_matrix(signal);
+        let brain_output = osobj.get_brain_output(&input, &sigmoida);
+        //println!("выходной сигнал нейросети {}", brain_output);
+        let common_force = osobj.common_force(&brain_output);
+        osobj.movement(common_force);
+        println!("Особь в точке {}", osobj.position);
     }
     
 }
