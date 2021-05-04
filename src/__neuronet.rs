@@ -28,7 +28,7 @@ impl fmt::Display for Matrix {
     
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         
-        // для больших матриц вместо части строк и столбцов выводим ...
+        // для больших матриц вместо части строк и столбцов выводим "..."
         let skip_rows_after: usize = 14;
         let skip_columns_after: usize = 9;
         
@@ -133,6 +133,16 @@ impl Matrix{
     }
     
     /// Возвращает транспонированную матрицу
+    /// ```
+    /// let m = Matrix::new(2,3);
+    /// m.set(0,0,1);
+    /// m.set(0,1,2);
+    /// m.set(0,1,3);
+    /// let mt = m.t();
+    /// assert_eq!(mt.get(0,0,1);
+    /// assert_eq!(mt.get(1,0,2);
+    /// assert_eq!(mt.get(2,0,3);
+    /// ```
     pub fn t(&self) -> Matrix{
         let mut result = Matrix::new(self.ncol, self.nrow);
         for row in 0..self.nrow {
@@ -143,16 +153,11 @@ impl Matrix{
         result
     }
     
-    pub fn panic_if_not_same_size(m1: &Matrix, m2: &Matrix){
-        if (m1.nrow != m2.nrow) || (m1.ncol != m2.ncol){
-            panic!("Размерности матриц не совпадают {}x{} != {}x{}", m1.nrow,m1.ncol, m2.nrow,m2.ncol);
-        }
-    }
-    
     // Вычитание
     pub fn sub(m1: &Matrix, m2: &Matrix) -> Matrix{
     
-        Matrix::panic_if_not_same_size(m1, m2);
+        assert_eq!(m1.nrow, m2.nrow);
+        assert_eq!(m1.ncol, m2.ncol);
     
         let mut result = Matrix::new(m1.nrow, m2.ncol);
         for index in 0..result.m.len(){
@@ -164,7 +169,8 @@ impl Matrix{
     // Сложение
     pub fn add(m1: &Matrix, m2: &Matrix) -> Matrix{
     
-        Matrix::panic_if_not_same_size(m1, m2);
+        assert_eq!(m1.nrow, m2.nrow);
+        assert_eq!(m1.ncol, m2.ncol);
     
         let mut result = Matrix::new(m1.nrow, m2.ncol);
         for index in 0..result.m.len(){

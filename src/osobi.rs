@@ -15,16 +15,22 @@
 //          Если оно хуже образца, образцу добавляется вес.
 // Или так:
 
+extern crate neuronet;
+
 use crate::common::{Point, Direct, Force};
-use crate::neuronet::{Tdata, FORMFACTOR, Matrix, Neuronet, Sigmoida};
+use crate::neuronet::{Tdata, FORMFACTOR, NeuroMatrix, Neuronet, Sigmoida};
+
+use crate::memory::{Memory, MemoryCell};
 
 pub enum TypeOfSensor {
     Light,
+    #[allow(dead_code)]
     Poison
 }
 
 // Сенсор. Чувствительность одного сенсора всегда равна 1.
 pub struct Sensor {
+    #[allow(dead_code)]
     typeofsensor: TypeOfSensor,
     // направление сенсора
     direct: Direct,
@@ -49,115 +55,6 @@ impl Sensor {
 // Орган движения. Сила всегда равна 1.
 pub struct Leg {
     direct: Direct,
-}
-
-// Ячейка памяти особи
-pub struct MemoryCell {
-    pub input: Matrix,
-    pub output: Matrix,
-    // изменение накопления энергии в результате этой реакции input->output
-    // по сравнению с накоплением энергии на предыдущем шаге
-    pub izm_delta_energy: f32,
-    // проведена тренировка нейросети на этом наборе
-    pub trained: bool,
-}
-
-pub struct Memory {
-    pub cells: Vec<MemoryCell>,
-}
-
-impl Matrix {
-    // "расстояние" между векторами
-    // разница между наборами входных сигналов
-    fn distance(&self, other:&Matrix) -> i32{
-    
-        Matrix::panic_if_not_same_size(self, other);
-
-        let mut result = 0;
-        for row in 0..self.nrow {
-            for col in 0..self.ncol {
-                let d = self.get(row,col) - other.get(row,col);
-                result = result + d*d;
-            }
-        }
-        result
-    }
-}
-
-impl Memory{
-
-    fn new() -> Memory {
-        Memory{
-            cells: Vec::<MemoryCell>::new(),
-        }
-    }
-    
-    fn get(&self, index: usize) -> &MemoryCell{
-        &self.cells[index]
-    }
-    
-    fn add(&mut self, input: Matrix, output: Matrix, izm_delta_energy: f32){
-        let memorycell = MemoryCell{
-            input: input,
-            output: output,
-            izm_delta_energy: izm_delta_energy,
-            trained: false,
-        };
-        self.cells.push(memorycell);
-    }
-    
-    fn replace(&mut self, index: usize, input: Matrix, output: Matrix, izm_delta_energy: f32){
-        let memorycell = MemoryCell{
-            input: input,
-            output: output,
-            izm_delta_energy: izm_delta_energy,
-            trained: false,
-        };
-        self.cells[index] = memorycell;
-    }
-    
-    // найти ближайший образец.
-    // возвращает индекс ячейки памяти
-    fn find_near(&self, input: &Matrix) -> Option<(usize, i32)>{
-//     Option<&MemoryCell>{
-
-//         рабочий код для возврата индекса ближайшего вектора
-//         self.cells
-//             .iter()
-//             .enumerate()
-//             .min_by_key(|(_idx, p)| p.input.distanсе(input))
-//             .map(|(idx, _val)| idx)
-            
-        // Мне надо получить индекс ближайшего вектора и величину дистанции.
-        self.cells
-            .iter()
-            .map(|p| p.input.distance(input))
-            .enumerate()
-            .min_by_key(|(_idx, p)| *p)
-            
-    }
-    
-}
-
-pub fn test_memory_find_near(){
-    
-    let mut memory = Memory::new();
-    
-    let input = Matrix::new_rand(1, 4, 0, 10, false);
-    println!(" 0: {}", &input);
-    let output = Matrix::new(1, 4);
-    memory.add(input, output, 0.0);
-//     
-    let input = Matrix::new_rand(1, 4, 0, 255, false);
-    println!(" n: {}", &input);
-    
-    let result = memory.find_near(&input);
-//     println!("ближайшее: {}", index);
-    match result {
-        Some(x) => println!("ближайшее: индекс {}, расстояние {}", x.0, x.1),//&x.input),
-        None    => println!("ближайшего элемента нет..."),
-    }    
-    
 }
 
 // особь
@@ -212,12 +109,28 @@ pub struct Osobj {
     
     // Память состояний
     memory: Memory,
+    #[allow(dead_code)]
     max_memory_cells: usize,
+    
+    // окрестность состояний входов нейросети, в которой происходит поиск оптимального выхода
+    len_memorycell_min: i32,
+    
+    // расстояние от ближайшей ячейки памяти, начиная с которого нужно делать новую ячейку памяти
+    len_memorycell_max: i32,
+    
     
     // Попробуем вместо памяти состояний использовать расчет "нейросети" окружаюющей среды
     //environment: Neuronet,
 }
 
+// Результат поиска в памяти
+pub enum ResultFindInMemory{
+    TryModifyCell(usize),//попробовать модифицировать выходной сигнал этой ячейки
+    MakeNewCell,// Нужно создавать новую ячейку
+    MoveByNeuronet// нужно двигаться по расчету нейросети
+}
+
+#[allow(dead_code)]
 impl Osobj {
     
     pub fn new(
@@ -251,6 +164,8 @@ impl Osobj {
             legs: legs,
             energy: energy,
             massa: 0.0,
+            len_memorycell_min: 5,
+            len_memorycell_max: 20,
         };
         
         osobj.massa = osobj.count_massa();
@@ -269,6 +184,7 @@ impl Osobj {
         massa
     }
     
+    #[allow(dead_code)]
     fn count_size(&self) -> u32 {
         // корень кубический из массы
         todo!("сделать вычисление корня кубического")
@@ -287,12 +203,12 @@ impl Osobj {
     }
     
     // выходной сигнал нейросети
-    pub fn get_brain_output(&self, input: &Matrix, sigmoida: &Sigmoida) -> Matrix {
+    pub fn get_brain_output(&self, input: &NeuroMatrix, sigmoida: &Sigmoida) -> NeuroMatrix {
         self.brain.getoutput(input, sigmoida)
     }
     
     // сумма вектора усилий ног в результате команды нейросети
-    pub fn common_force(&mut self, brain_output: &Matrix) -> Force {
+    pub fn common_force(&self, brain_output: &NeuroMatrix) -> Force {
     
         // нужно сложить векторы усилий ног
         let mut forces = Vec::<Force>::new();
@@ -331,33 +247,48 @@ impl Osobj {
         self.energy = self.energy + sol_force;
     }
     
-    pub fn find_in_memory(&self, input: &Matrix) -> Option<(usize, i32)>{
-        self.memory.find_near(input)
+    pub fn find_in_memory(&self, input: &NeuroMatrix) -> ResultFindInMemory{
+        let in_memory = self.memory.find_near(input);
+        match in_memory {
+            Some((index, distance)) => {
+                if distance <= self.len_memorycell_min {
+                    ResultFindInMemory::TryModifyCell(index)
+                } else if distance > self.len_memorycell_max {
+                    ResultFindInMemory::MakeNewCell
+                } else {
+                    ResultFindInMemory::MoveByNeuronet
+                }
+            },
+        None=> ResultFindInMemory::MakeNewCell
+        }
+        
     }
     
-    pub fn put_to_memory(&mut self, input: Matrix, output: Matrix, delta_energy: f32){
-        self.memory.add(input, output, delta_energy);
+    pub fn add_to_memory(&mut self, input: NeuroMatrix, output: NeuroMatrix, delta_gain_energy: Option<f32>){
+        self.memory.add(input, output, delta_gain_energy);
     }
     
-    pub fn replace_in_memory(&mut self, index:usize, input: Matrix, output: Matrix, delta_energy: f32){
-        self.memory.replace(index, input, output, delta_energy);
+    pub fn replace_in_memory(&mut self, index:usize, input: NeuroMatrix, output: NeuroMatrix, delta_gain_energy: Option<f32>){
+        self.memory.replace(index, input, output, delta_gain_energy);
     }
     
     pub fn get_memory_cell(&self, index: usize) -> &MemoryCell{
         self.memory.get(index)
     }
     
-    pub fn brain_training(&mut self, input: &Matrix, output: &Matrix, sigmoida: &Sigmoida){
+    pub fn brain_training(&mut self, input: &NeuroMatrix, output: &NeuroMatrix, sigmoida: &Sigmoida){
         self.brain.training(input, output, sigmoida);
     }
 
 }
 
 // простейший мозг: один сенсор, один выход, один скрытый слой
+#[allow(dead_code)]
 pub fn simple_brain() -> Neuronet{
     Neuronet::new(vec![1,1,1])
 }
 
+#[allow(dead_code)]
 pub fn simple_sensors() -> Vec<Sensor> {
     let sensor = Sensor{
         typeofsensor: TypeOfSensor::Light,
@@ -366,6 +297,7 @@ pub fn simple_sensors() -> Vec<Sensor> {
     vec![sensor,]
 }
 
+#[allow(dead_code)]
 pub fn simple_legs() -> Vec<Leg> {
     let leg = Leg{
         direct: Direct::random(),
@@ -374,6 +306,7 @@ pub fn simple_legs() -> Vec<Leg> {
 }
 
 // Особь для тестирования
+#[allow(dead_code)]
 pub fn sample_osobj() -> Osobj{
 
     let count_of_leg = 4;

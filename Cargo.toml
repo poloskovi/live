@@ -8,3 +8,5 @@ edition = "2018"
 
 [dependencies]
 rand = "0.7"
+neuronet = { path = "../neuronet"}
+matrix = { git = "https://github.com/poloskovi/matrix", version = ">=0.1.2"}
