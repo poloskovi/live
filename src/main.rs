@@ -34,11 +34,12 @@
 
 extern crate neuronet;
 use neuronet::NeuroMatrix;
-use crate::neuronet::MatrixAdditions;
 
 mod common;
 mod memory;
 mod osobi;
+mod neuroadd;
+use crate::neuroadd::MatrixAdditions2;
 
 use common::{Point, Force};
 // use osobi::Osobj;

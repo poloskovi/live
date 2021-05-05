@@ -147,4 +147,3 @@ impl fmt::Display for Force {
     }
 }
 
-

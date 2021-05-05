@@ -24,7 +24,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "live"
 version = "0.1.0"
 dependencies = [
- "neuronet 0.1.0 (git+https://github.com/poloskovi/neuronet)",
+ "neuronet 0.1.1 (git+https://github.com/poloskovi/neuronet)",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -35,8 +35,8 @@ source = "git+https://github.com/poloskovi/matrix#419bf7c8ad50470c8d5709442a2905
 
 [[package]]
 name = "neuronet"
-version = "0.1.0"
-source = "git+https://github.com/poloskovi/neuronet#313dd6caaa59a1916aec2e6ec1b6d9f67e1119da"
+version = "0.1.1"
+source = "git+https://github.com/poloskovi/neuronet#ad42c5d5a412168c51861497ad5d7f2c363658a5"
 dependencies = [
  "matrix 0.1.2 (git+https://github.com/poloskovi/matrix)",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -94,7 +94,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum getrandom 0.1.16 (registry+https://github.com/rust-lang/crates.io-index)" = "8fc3cb4d91f53b50155bdcfd23f6a4c39ae1969c2ae85982b135750cccaf5fce"
 "checksum libc 0.2.81 (registry+https://github.com/rust-lang/crates.io-index)" = "1482821306169ec4d07f6aca392a4681f66c75c9918aa49641a2595db64053cb"
 "checksum matrix 0.1.2 (git+https://github.com/poloskovi/matrix)" = "<none>"
-"checksum neuronet 0.1.0 (git+https://github.com/poloskovi/neuronet)" = "<none>"
+"checksum neuronet 0.1.1 (git+https://github.com/poloskovi/neuronet)" = "<none>"
 "checksum ppv-lite86 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)" = "ac74c624d6b2d21f425f752262f42188365d7b8ff1aff74c82e45136510a4857"
 "checksum rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)" = "6a6b1679d49b24bbfe0c803429aa1874472f50d9b363131f0e89fc356b544d03"
 "checksum rand_chacha 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "f4c8ed856279c9737206bf725bf36935d8666ead7aa69b52be55af369d193402"

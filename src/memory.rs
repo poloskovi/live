@@ -1,6 +1,7 @@
 extern crate neuronet;
 use neuronet::NeuroMatrix;
-use crate::neuronet::MatrixAdditions;
+// use crate::neuronet::MatrixAdditions;
+use crate::neuroadd::MatrixAdditions2;
 
 // Ячейка памяти особи
 pub struct MemoryCell {
