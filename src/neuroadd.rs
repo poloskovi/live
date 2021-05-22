@@ -15,21 +15,18 @@ impl MatrixAdditions2 for NeuroMatrix{
 
         let mut result = NeuroMatrix::new(self.nrow, self.ncol);
         let mut rng = rand::thread_rng();
+        let i = rng.gen_range(0, result.m.len());//берем случайный элемент
 
-        for i in 0..self.nrow {
-            for j in 0..self.ncol {
-                let x = self.get(i,j);
-                let dx_max = (FORMFACTOR as f32 * procent / 100.0) as Tdata;
-                let dx = rng.gen_range(-dx_max, dx_max);
-                let mut x_new = x+dx;
-                if x_new < 0{
-                    x_new = 0;
-                }else if x_new > FORMFACTOR{
-                    x_new = FORMFACTOR;
-                }
-                result.set(i,j, x_new);
-            }
+        let x = self.m[i];
+        let dx_max = (FORMFACTOR as f32 * procent / 100.0) as Tdata;
+        let dx = rng.gen_range(-dx_max, dx_max);
+        let mut x_new = x+dx;
+        if x_new < 0{
+            x_new = 0;
+        }else if x_new > FORMFACTOR{
+            x_new = FORMFACTOR;
         }
+        result.m[i] = x_new;
         result
 
     }
@@ -48,4 +45,5 @@ impl MatrixAdditions2 for NeuroMatrix{
         }
         result
     }
+
 }

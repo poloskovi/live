@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies]
 rand = "0.7"
-neuronet = { git = "https://github.com/poloskovi/neuronet", version = ">=0.1.1"}
-#neuronet = { file = "../neuronet" }
+#neuronet = { file = "../neuronet", version = ">=0.1.2"}
+neuronet = { git = "https://github.com/poloskovi/neuronet", version = ">=0.1.2"}

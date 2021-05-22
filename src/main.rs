@@ -41,12 +41,11 @@ mod osobi;
 mod neuroadd;
 use crate::neuroadd::MatrixAdditions2;
 
-use common::{Point, Force};
-// use osobi::Osobj;
+use common::{Point, Polar, Force, Direct};
 
 // источник энергии
 struct EnergySource {
-    position: Point,
+    position: Polar,
     power: f32,
 }
 
@@ -54,37 +53,31 @@ impl EnergySource {
 
     fn force_at_point(&self, p:Point) -> Force{
     
-        let dx = p.x - self.position.x;
-        let dy = p.y - self.position.y;
+        let sol_point = self.position.to_decart();
+        let dx = p.x - sol_point.x;
+        let dy = p.y - sol_point.y;
         
-        let (r, direct) = Point{
+        let polar = Point{
             x: dx,
             y: dy,
         }.to_polar();
-        
+
         Force{ 
             // в двумерном мире мощность света обратно пропорциональна расстоянию,
             // при переходе на трехмерный мир переделать на квадрат расстояния
-            f: self.power / r, 
-            direct: direct,
+            f: self.power / polar.r,
+            direct: polar.direct,
         }
         
     }
 }
 
 fn sample_sol() -> EnergySource {
-
-    let position = Point{
-        x: 0.0,
-        y: 0.0,
-//         z: 0,
-    };
-    
+    let position = Polar::new(900.0, Direct::new(0.0));
     EnergySource {
         position: position,
-        power: 10000.0,
+        power: 100000.0,
     }
-    
 }
 
 // // источник яда
@@ -100,7 +93,7 @@ fn test_signal_on_sensors() {
     let mut osobj = osobi::sample_osobj();
      
     osobj.position.y = -100.0;
-     
+
     while osobj.position.x > -120.0 {
      
         let sol_force_at_osobj = sol.force_at_point(osobj.position);
@@ -118,7 +111,7 @@ fn test_signal_on_sensors() {
 
     osobj.position.x = 100.0;
     osobj.position.y = 100.0;
-     
+
     while osobj.position.x > -120.0 {
      
         let sol_force_at_osobj = sol.force_at_point(osobj.position);
@@ -149,14 +142,16 @@ fn main() {
     
     let sigmoida = neuronet::Sigmoida::new();
     
-    let sol = sample_sol();
+    let mut sol = sample_sol();
+
     let mut osobj = osobi::sample_osobj();
-    
+    osobj.position.x = 0.0;
+    osobj.position.y = 0.0;
+
     //предыдущее накопление энергии
-    let mut prev_gain_energy: Option<f32> = None;
+    //let mut prev_gain_energy: Option<f32> = None;
     
     let mut sol_force_at_osobj = sol.force_at_point(osobj.position);
-    println!("Особь в точке {}, освещенность {}", osobj.position, sol_force_at_osobj);
     
     // Я думаю, надо делать так:
     //  1. Разбить пространство расстояний между векторами входных сигналов Lвх на N частей.
@@ -172,38 +167,52 @@ fn main() {
     //      тем лучше нужно быть приспособленным именно к этому состоянию.
     //  6. В области [dLвх(мин)] << [dLвх(сред)] время от времени еще раз пробовать модифицировать Lвых
    
-    for _ in 0..10 {
-    
+    for tact in 0..100000 {
+
         let prev_energy = osobj.energy;
         let signal = osobj.signal_on_sensors(vec![sol_force_at_osobj]);
         let input = NeuroMatrix::vec_to_matrix(signal);
+
+        sol.position.direct.fi = sol.position.direct.fi + 0.005; // в градусах
+        if sol.position.direct.fi > 360.0{
+            sol.position.direct.fi = sol.position.direct.fi - 360.0;
+        };
+
+        if tact % 1000 == 0{
+            println!("Cолнце {}, Особь {}, энергия {}",
+                sol.position, osobj.position.to_polar(), osobj.energy);
+        }
 
         match osobj.find_in_memory(&input) {
         
             osobi::ResultFindInMemory::MakeNewCell => {
             
-                println!("ResultFindInMemory::MakeNewCell");
-                
                 let brain_output = osobj.get_brain_output(&input, &sigmoida);
                 let common_force = osobj.common_force(&brain_output);
                 osobj.movement(common_force);
+
                 //изменения после перемещения
                 sol_force_at_osobj = sol.force_at_point(osobj.position);
                 osobj.change_energy(sol_force_at_osobj.f);
                 let new_gain_energy = osobj.energy - prev_energy;
                 
                 // добавляем ячейку памяти
-                osobj.add_to_memory(input, 
-                    brain_output, 
-                    delta_gain_energy(new_gain_energy, prev_gain_energy));
+                osobj.add_to_memory(&input,
+                    &brain_output,
+                    delta_gain_energy(new_gain_energy, osobj.prev_gain_energy),
+                    tact
+                );
                     
-                prev_gain_energy = Some(new_gain_energy);
+                osobj.prev_gain_energy = Some(new_gain_energy);
             },
             
             osobi::ResultFindInMemory::MoveByNeuronet => {
             
-                println!("ResultFindInMemory::MoveByNeuronet");
-                
+                if osobj.need_train_brain {
+                    osobj.brain_training(&sigmoida);
+                    osobj.need_train_brain = false;
+                };
+
                 let brain_output = osobj.get_brain_output(&input, &sigmoida);
                 let common_force = osobj.common_force(&brain_output);
                 osobj.movement(common_force);
@@ -212,7 +221,7 @@ fn main() {
                 osobj.change_energy(sol_force_at_osobj.f);
                 let new_gain_energy = osobj.energy - prev_energy;
                 
-                prev_gain_energy = Some(new_gain_energy);
+                osobj.prev_gain_energy = Some(new_gain_energy);
             }
             
             osobi::ResultFindInMemory::TryModifyCell(index_memory_cell) => {
@@ -221,16 +230,15 @@ fn main() {
                 // и проверить, дала ли эта модификация лучшее накопление энергии, чем записанное в ячейке
                 // Если в ячейке не записано изменение накопления энергии, то просто записать новое
                 
-                println!("ResultFindInMemory::TryModifyCell");
-                
                 let brain_output;
                 let memory_cell_delta_gain_energy;
                 {
-                    let memory_cell = osobj.get_memory_cell(index_memory_cell);
+                    let memory_cell = osobj.get_memory_cell(index_memory_cell, tact);
+
                     memory_cell_delta_gain_energy = memory_cell.delta_gain_energy;
                     match memory_cell_delta_gain_energy{
                         Some(_) => {
-                            brain_output = memory_cell.output.modify(10.0); 
+                            brain_output = memory_cell.output.modify(30.0);
                         },
                         None => {
                             brain_output = osobj.get_brain_output(&input, &sigmoida);
@@ -245,42 +253,41 @@ fn main() {
                 osobj.change_energy(sol_force_at_osobj.f);
                 let new_gain_energy = osobj.energy - prev_energy;
                 
-                match (memory_cell_delta_gain_energy, delta_gain_energy(new_gain_energy, prev_gain_energy)){
+                match (memory_cell_delta_gain_energy, delta_gain_energy(new_gain_energy, osobj.prev_gain_energy)){
                     (Some(x_old), Some(x_new)) => {
                         if x_new > x_old{
-                            println!("replaced");
-                            osobj.replace_in_memory(index_memory_cell, input, brain_output, Some(x_new));
-                        }else{
-                            println!("not replaced");
+                            osobj.replace_in_memory(
+                                index_memory_cell,
+                                &input,
+                                &brain_output,
+                                Some(x_new),
+                                tact
+                            );
                         }
                     },
                     (None, Some(x_new)) => {
-                        println!("replaced first");
-                        osobj.replace_in_memory(index_memory_cell, input, brain_output, Some(x_new));
+                        osobj.replace_in_memory(
+                            index_memory_cell,
+                            &input,
+                            &brain_output,
+                            Some(x_new),
+                            tact
+                        );
                     }
                     _ => {},
                 }
                 
-                prev_gain_energy = Some(new_gain_energy);
+                osobj.prev_gain_energy = Some(new_gain_energy);
             }
 
         };
     
-                
     }
     
-//     osobj.position.x = -100.0;
-//     osobj.position.y = -100.0;
-//     
-//     // тренировка закончена, пускаемся в свободное плавание
-//     for _i in 0..50 {
-//         let signal = osobj.signal_on_sensors(vec![sol_force_at_osobj]);
-//         let input = neuronet::Matrix::vec_to_matrix(signal);
-//         let brain_output = osobj.get_brain_output(&input, &sigmoida);
-//         //println!("выходной сигнал нейросети {}", brain_output);
-//         let common_force = osobj.common_force(&brain_output);
-//         osobj.movement(common_force);
-//         println!("Особь в точке {}", osobj.position);
-//     }
-    
+    println!("ячейки памяти:");
+    for memorycell in osobj.memory.cells.iter(){
+        print!("{} {}", memorycell.last_used, &memorycell.input);
+        println!("{}", &memorycell.output);
+    }
+
 }

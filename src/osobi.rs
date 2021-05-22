@@ -41,7 +41,7 @@ impl Sensor {
     pub fn signal_on_sensor(&self, force: &Force) -> f32 {
         // угол между осью сенсора и источником сигнала
         let delta_angle = - self.direct.delta(force.direct.revers());
-        
+
         // сенсор видит сигнал, если направлен в ту же полусферу, откуда приходит сигнал
         let signal = (delta_angle * std::f32::consts::PI / 180.0).cos() * force.f;
         if signal < 0.0 {
@@ -63,28 +63,9 @@ pub struct Osobj {
     // текущие координаты
     pub position: Point,
     
-    // направление (от направления особи завивит направление обзора сенсора)
-    //      сделать потом
-    // direct: common::Direct,
-    
     // Нейросеть рецепторы-органы движения
+    brain_configuration: Vec<usize>,
     brain: Neuronet,
-    
-    // Единая нейросеть: 
-    // Вход (сигнал на рецепторах) - анализатор - органы движения - окружающая среда - изменение целевой функции 
-    // (в простейшем случае целевая функция - это накопление энергии)
-    //      Нет, так нельзя. Нейросеть окружающей среды должна иметь на входе и движение ног, 
-    //      и значения параметров окружающей среды, полученные через сенсоры.
-    //      Кроме того, непонятно, что есть целевая функция. Стремиться к какой-то цифре? 
-    //      Но вдалеке от источника света ее не достичь
-    //      Вариант с памятью лучше, так как на примерно одинаковых входных значениях 
-    //      выбирается движение, дающее максимальный прирост 
-    //      целевой функции для данных условий
-    //      
-    // brain_and_env: Neuronet,
-    
-    // позиция органов движения в нейросети
-    // pos_legs: usize,
     
     // Сенсоры, получают информацию из окружающей среды и передают на вход нейросети
     // индекс сенсора равен индексу входного слоя нейросети
@@ -102,13 +83,8 @@ pub struct Osobj {
     // Масса, равна сумме клеток мозга
     massa: f32,
     
-    // Линейный размер, корень кубический из массы.
-    // Влияет на минимальное расстояние между особями
-    //      сделать потом
-    // size: u32,
-    
     // Память состояний
-    memory: Memory,
+    pub memory: Memory, //временно pub
     #[allow(dead_code)]
     max_memory_cells: usize,
     
@@ -117,10 +93,13 @@ pub struct Osobj {
     
     // расстояние от ближайшей ячейки памяти, начиная с которого нужно делать новую ячейку памяти
     len_memorycell_max: i32,
+
+    // Требуется пересчет нейросети
+    pub need_train_brain: bool,
+
+    // накопление энергии на предыдущем шаге
+    pub prev_gain_energy: Option<f32>,
     
-    
-    // Попробуем вместо памяти состояний использовать расчет "нейросети" окружаюющей среды
-    //environment: Neuronet,
 }
 
 // Результат поиска в памяти
@@ -135,7 +114,7 @@ impl Osobj {
     
     pub fn new(
         position: Point, 
-        brain: Neuronet, 
+        brain_configuration: Vec<usize>,
         memory: Memory,
         max_memory_cells: usize,
         sensors: Vec<Sensor>, 
@@ -143,37 +122,43 @@ impl Osobj {
         energy: f32
         ) -> Osobj {
     
-        // количество органов движения равно количеству выходов нейросети
-        let n_legs = brain.n_outputs();
-        let n_sensors = brain.n_inputs();
-        
-        if sensors.len() != n_sensors {
+        if sensors.len() != brain_configuration[0] {
             panic!("Количество сенсоров особи не равно количеству входов нейросети");
         };
     
-        if legs.len() != n_legs{
+        if legs.len() != brain_configuration[brain_configuration.len()-1]{
             panic!("Количество ног особи не равно количеству выходов нейросети");
         };
     
         let mut osobj = Osobj{
             position: position,
-            brain: brain,
+            brain: Neuronet::new(&brain_configuration),
+            brain_configuration: brain_configuration,
             max_memory_cells: max_memory_cells,
             memory: memory,
             sensors: sensors,
             legs: legs,
             energy: energy,
             massa: 0.0,
-            len_memorycell_min: 5,
-            len_memorycell_max: 20,
+            len_memorycell_min: 800,
+            len_memorycell_max: 3200,
+            need_train_brain: false,
+            prev_gain_energy: None,
         };
         
         osobj.massa = osobj.count_massa();
-//         osobj.size = osobj.count_size();
         
         osobj
     
     }
+
+//    pub fn copy(&self) -> Osobj{
+//        Osobj::new(
+//            self.position,
+//            self.brain_configuration,
+
+//        )
+//    }
 
     // добавить "массу" памяти
     fn count_massa(&self) -> f32 {
@@ -213,7 +198,6 @@ impl Osobj {
         // нужно сложить векторы усилий ног
         let mut forces = Vec::<Force>::new();
         for (i, value) in self.legs.iter().enumerate() {
-//             println!("{} {} {}", i, brain_output.get(0, i), value.direct);
             forces.push(
                 Force{
                     f: 1.0 * // сила каждой ноги = 1
@@ -232,21 +216,27 @@ impl Osobj {
     pub fn movement(&mut self, force: Force) {
         
         // длина перемещения
-        let koeff = 100.0; // коэффициент, подобрать экспериментально
+        let koeff = 20.0; // коэффициент, подобрать экспериментально
         let r = force.f * koeff / self.massa;
         self.position.movement(r, force.direct);
         
         // ограничение "аквариума"
-        // переделать на функцию "мира" (сделать объект "мир")
-        if self.position.y > -50.0 {
-            self.position.y = -50.0;
+
+        let mut polar = self.position.to_polar();
+        if polar.r > 400.0 {
+            polar.r = 400.0;
+            self.position = polar.to_decart();
         }
+
     }
     
     pub fn change_energy(&mut self, sol_force: f32){
-        self.energy = self.energy + sol_force;
+        let expenses = 0.1;  // постоянные расходы на перемещение
+                            // можно сделать зависимыми от усилий ног
+        self.energy = self.energy + sol_force/1000.0 - expenses
     }
     
+    // поиск, есть ли в памяти похожая ситуация
     pub fn find_in_memory(&self, input: &NeuroMatrix) -> ResultFindInMemory{
         let in_memory = self.memory.find_near(input);
         match in_memory {
@@ -264,20 +254,44 @@ impl Osobj {
         
     }
     
-    pub fn add_to_memory(&mut self, input: NeuroMatrix, output: NeuroMatrix, delta_gain_energy: Option<f32>){
-        self.memory.add(input, output, delta_gain_energy);
+    pub fn add_to_memory(&mut self,
+        input: &NeuroMatrix,
+        output: &NeuroMatrix,
+        delta_gain_energy: Option<f32>,
+        tact: u32)
+    {
+        self.memory.add(input, output, delta_gain_energy, tact);
+        self.need_train_brain = true;
     }
     
-    pub fn replace_in_memory(&mut self, index:usize, input: NeuroMatrix, output: NeuroMatrix, delta_gain_energy: Option<f32>){
-        self.memory.replace(index, input, output, delta_gain_energy);
+    pub fn replace_in_memory(
+        &mut self,
+        index:usize,
+        input: &NeuroMatrix,
+        output: &NeuroMatrix,
+        delta_gain_energy: Option<f32>,
+        tact: u32
+    ){
+        self.memory.replace(index, input, output, delta_gain_energy, tact);
+        self.need_train_brain = true;
     }
     
-    pub fn get_memory_cell(&self, index: usize) -> &MemoryCell{
-        self.memory.get(index)
+    pub fn get_memory_cell(
+        &self,
+        index: usize,
+        tact: u32
+    ) -> &MemoryCell{
+        self.memory.get(index, tact)
     }
     
-    pub fn brain_training(&mut self, input: &NeuroMatrix, output: &NeuroMatrix, sigmoida: &Sigmoida){
-        self.brain.training(input, output, sigmoida);
+    pub fn brain_training(&mut self, sigmoida: &Sigmoida){
+        // "забываем" все
+        self.brain = Neuronet::new(&self.brain_configuration);
+        for memorycell in self.memory.cells.iter(){
+            for _ in 0..5{
+                self.brain.training(&memorycell.input, &memorycell.output, sigmoida);
+            }
+        }
     }
 
 }
@@ -285,7 +299,7 @@ impl Osobj {
 // простейший мозг: один сенсор, один выход, один скрытый слой
 #[allow(dead_code)]
 pub fn simple_brain() -> Neuronet{
-    Neuronet::new(vec![1,1,1])
+    Neuronet::new(&vec![1,1,1])
 }
 
 #[allow(dead_code)]
@@ -312,9 +326,8 @@ pub fn sample_osobj() -> Osobj{
     let count_of_leg = 4;
     let count_of_sensors = 4;
 
-    let brain = Neuronet::new(vec![count_of_sensors, 10, 10, count_of_leg]);
-//     let environment = Neuronet::new(vec![count_of_leg, 10, 10, count_of_sensors]);
-    let memory = Memory::new();
+    let brain_configuration = vec![count_of_sensors, 10, 10, 10, count_of_leg];
+    let memory = Memory::new(100);
     
     let leg_1 = Leg{
         direct: Direct{fi:0.0}
@@ -353,12 +366,12 @@ pub fn sample_osobj() -> Osobj{
         y: -100.0,
     };
     
-    let start_energy = 100.0;
+    let start_energy = 10.0;
     let max_memory_cells = 10;
     
     Osobj::new(
         position, 
-        brain,
+        brain_configuration,
         memory,
         max_memory_cells,
         sensors,

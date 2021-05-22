@@ -30,25 +30,28 @@ impl Point{
         }
     }
     // перевод в полярную систему координат
-    pub fn to_polar(&self) -> (f32, Direct) {
+    pub fn to_polar(&self) -> Polar {
     
+        let r;
+        let mut fi;
         let r_sqr = self.x*self.x + self.y*self.y;
-        let r = r_sqr.sqrt();
-        
-        let mut fi = (self.y / r).asin() 
-            * 180.0/std::f32::consts::PI; // перевод в градусы
+
+        if r_sqr == 0.0{
+            r = 0.0;
+            fi = 0.0;
+        }else{
+            r = r_sqr.sqrt();
+            fi = (self.y / r).asin()
+                * 180.0/std::f32::consts::PI; // перевод в градусы
                         
-        if self.y < 0.0 && self.x < 0.0 { 
-            fi = -180.0 - fi
-        }else if self.y > 0.0 && self.x < 0.0 {
-            fi = 180.0 - fi
-        }
-        
-        ( r, 
-            Direct{
-                fi: fi,
+            if self.y < 0.0 && self.x < 0.0 {
+                fi = -180.0 - fi
+            }else if self.y > 0.0 && self.x < 0.0 {
+                fi = 180.0 - fi
             }
-        )
+        
+        }
+        Polar::new(r, Direct::new(fi))
     }
     pub fn movement(&mut self, r: f32, direct: Direct){
         let delta = Point::polar_to_decart(r, direct);
@@ -57,16 +60,46 @@ impl Point{
     }
 }
 
+// координаты в полярной системе координат
+#[derive(Copy, Clone)]
+pub struct Polar{
+    pub r: f32,
+    pub direct: Direct
+}
+
+impl Polar{
+    pub fn new(r:f32, direct: Direct) -> Polar{
+        Polar{
+            r,
+            direct,
+        }
+    }
+    pub fn to_decart(self) -> Point {
+        let angle_radian = self.direct.fi * std::f32::consts::PI / 180.0;
+        Point{
+            x: self.r * angle_radian.cos(),
+            y: self.r * angle_radian.sin(),
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl fmt::Display for Point {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "x={}, y={}", self.x, self.y)
+        write!(f, "x={:5.2}, y={:5.2}", self.x, self.y)
+    }
+}
+
+#[allow(dead_code)]
+impl fmt::Display for Polar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "r={:6.0}, fi={:5.0}", self.r, self.direct.fi)
     }
 }
 
 // Направление в сферической системе координат
 // углы указаны в градусах
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Direct{
     // азимут
     pub fi: f32,
@@ -76,6 +109,13 @@ pub struct Direct{
 
 #[allow(dead_code)]
 impl Direct{
+
+    pub fn new(fi:f32) -> Direct{
+        Direct{
+            fi
+        }
+    }
+
     pub fn random() -> Direct{
     
         let mut rng = rand::thread_rng();
@@ -111,7 +151,7 @@ impl fmt::Display for Direct{
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Force{
     pub f: f32,
     pub direct: Direct,
@@ -128,14 +168,14 @@ impl Force{
             fx = fx + p.x;
             fy = fy + p.y;
         }
-        let (f, direct) = Point{
+        let polar = Point{
             x: fx,
             y: fy,
         }.to_polar();
         
         Force{
-            f: f,
-            direct: direct,
+            f: polar.r,
+            direct: polar.direct,
         }
     }
 }

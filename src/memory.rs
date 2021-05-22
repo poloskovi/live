@@ -11,41 +11,67 @@ pub struct MemoryCell {
     // по сравнению с накоплением энергии на предыдущем шаге
     pub delta_gain_energy: Option<f32>,
     // проведена тренировка нейросети на этом наборе
-    pub n_trained: i16,
+    //pub n_trained: i16, // убрать?
+    pub last_used: u32, // такт, на котором использовано последний раз
 }
 
 pub struct Memory {
     pub cells: Vec<MemoryCell>,
+    capacity: usize,
+    // перенести сюда len_memorycell_min и max ?
 }
 
 impl Memory{
 
-    pub fn new() -> Memory {
+    pub fn new(capacity: usize) -> Memory {
         Memory{
-            cells: Vec::<MemoryCell>::new(),
+            cells: Vec::<MemoryCell>::with_capacity(capacity),
+            capacity
         }
     }
     
-    pub fn get(&self, index: usize) -> &MemoryCell{
-        &self.cells[index]
+    pub fn get(&self, index: usize, _tact:u32) -> &MemoryCell{
+        let cell = &self.cells[index];
+        //*cell.last_used = tact; //сделать
+        cell
     }
     
-    pub fn add(&mut self, input: NeuroMatrix, output: NeuroMatrix, delta_gain_energy: Option<f32>){
+    pub fn add(&mut self,
+        input: &NeuroMatrix,
+        output: &NeuroMatrix,
+        delta_gain_energy: Option<f32>,
+        tact: u32)
+    {
         let memorycell = MemoryCell{
-            input,
-            output,
+            input: input.copy(),
+            output: output.copy(),
             delta_gain_energy,
-            n_trained: 0,
+            last_used: tact,
         };
         self.cells.push(memorycell);
+        //if self.cells.len() > self.capacity{
+            // удалить самую старую ячейку
+//            todo!("написать код");
+            let result = self.cells.iter().min_by_key(|p| p.last_used);
+            match result{
+                Some(cell) => println!("{}", cell.last_used),
+                None => unreachable!()
+            }
+        //}
     }
     
-    pub fn replace(&mut self, index: usize, input: NeuroMatrix, output: NeuroMatrix, delta_gain_energy: Option<f32>){
+    pub fn replace(&mut self,
+        index: usize,
+        input: &NeuroMatrix,
+        output: &NeuroMatrix,
+        delta_gain_energy: Option<f32>,
+        tact: u32)
+    {
         let memorycell = &mut self.cells[index];
-        memorycell.input = input;
-        memorycell.output = output;
+        memorycell.input = input.copy();
+        memorycell.output = output.copy();
         memorycell.delta_gain_energy = delta_gain_energy;
-        memorycell.n_trained = memorycell.n_trained + 1;
+        memorycell.last_used = tact;
     }
     
     // Возвращает индекс ячейки памяти с ближайшим входом и величину дистанции.
@@ -59,28 +85,6 @@ impl Memory{
     }
     
 }
-
-// #[allow(dead_code)]
-// pub fn test_memory_find_near(){
-//     
-//     let mut memory = Memory::new();
-//     
-//     let input = Matrix::new_rand(1, 4, 0, 10, false);
-//     println!(" 0: {}", &input);
-//     let output = Matrix::new(1, 4);
-//     memory.add(input, output, 0.0);
-// //     
-//     let input = Matrix::new_rand(1, 4, 0, 255, false);
-//     println!(" n: {}", &input);
-//     
-//     let result = memory.find_near(&input);
-// //     println!("ближайшее: {}", index);
-//     match result {
-//         Some(x) => println!("ближайшее: индекс {}, расстояние {}", x.0, x.1),//&x.input),
-//         None    => println!("ближайшего элемента нет..."),
-//     }    
-//     
-// }
 
 
 
