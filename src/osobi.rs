@@ -22,6 +22,9 @@ use crate::neuronet::{Tdata, FORMFACTOR, NeuroMatrix, Neuronet, Sigmoida};
 
 use crate::memory::{Memory, MemoryCell};
 
+extern crate rand;
+use rand::Rng;
+
 pub enum TypeOfSensor {
     Light,
     #[allow(dead_code)]
@@ -64,7 +67,7 @@ pub struct Osobj {
     pub position: Point,
     
     // Нейросеть рецепторы-органы движения
-    brain_configuration: Vec<usize>,
+    pub nnodes: Vec<usize>,
     brain: Neuronet,
     
     // Сенсоры, получают информацию из окружающей среды и передают на вход нейросети
@@ -81,12 +84,11 @@ pub struct Osobj {
     pub energy: f32,
     
     // Масса, равна сумме клеток мозга
-    massa: f32,
+    pub massa: f32,
     
     // Память состояний
-    pub memory: Memory, //временно pub
-    #[allow(dead_code)]
-    max_memory_cells: usize,
+    memory: Memory, //временно pub
+    memory_capacity: usize,
     
     // окрестность состояний входов нейросети, в которой происходит поиск оптимального выхода
     len_memorycell_min: i32,
@@ -99,6 +101,9 @@ pub struct Osobj {
 
     // накопление энергии на предыдущем шаге
     pub prev_gain_energy: Option<f32>,
+
+    // особь мертва
+    pub dead: bool,
     
 }
 
@@ -113,29 +118,27 @@ pub enum ResultFindInMemory{
 impl Osobj {
     
     pub fn new(
-        position: Point, 
         brain_configuration: Vec<usize>,
-        memory: Memory,
-        max_memory_cells: usize,
+        memory_capacity: usize,
         sensors: Vec<Sensor>, 
         legs: Vec<Leg>, 
         energy: f32
         ) -> Osobj {
     
-        if sensors.len() != brain_configuration[0] {
-            panic!("Количество сенсоров особи не равно количеству входов нейросети");
-        };
-    
-        if legs.len() != brain_configuration[brain_configuration.len()-1]{
-            panic!("Количество ног особи не равно количеству выходов нейросети");
-        };
-    
+        //добавить входной и выходной слои нейросети
+        let mut nnodes = Vec::with_capacity(brain_configuration.len()+2);
+        nnodes.push(legs.len());
+        for node in &brain_configuration{
+            nnodes.push(*node);
+        }
+        nnodes.push(sensors.len());
+
         let mut osobj = Osobj{
-            position: position,
-            brain: Neuronet::new(&brain_configuration),
-            brain_configuration: brain_configuration,
-            max_memory_cells: max_memory_cells,
-            memory: memory,
+            position: Point{x:0.0, y:0.0},
+            brain: Neuronet::new(&nnodes),
+            nnodes: nnodes,
+            memory: Memory::new(memory_capacity),
+            memory_capacity: memory_capacity,
             sensors: sensors,
             legs: legs,
             energy: energy,
@@ -144,6 +147,7 @@ impl Osobj {
             len_memorycell_max: 3200,
             need_train_brain: false,
             prev_gain_energy: None,
+            dead: false,
         };
         
         osobj.massa = osobj.count_massa();
@@ -152,13 +156,30 @@ impl Osobj {
     
     }
 
-//    pub fn copy(&self) -> Osobj{
-//        Osobj::new(
-//            self.position,
-//            self.brain_configuration,
+    pub fn copy_modify(&self) -> Osobj{
 
-//        )
-//    }
+        let mut brain_configuration = Vec::with_capacity(self.nnodes.len()-2);
+        for i in 1..&self.nnodes.len()-1{
+            brain_configuration.push(self.nnodes[i]);
+        }
+        //слегка модифицируем конфигурацию нейросети
+        let mut rng = rand::thread_rng();
+        let i = rng.gen_range(0, brain_configuration.len());//случайный слой
+        let mut low = brain_configuration[i] - 1;
+        if low < 1{
+            low = 1;
+        }
+        let high = brain_configuration[i] + 1;
+        brain_configuration[i] = rng.gen_range(low, high+1);
+
+        Osobj::new(
+            brain_configuration,
+            self.memory_capacity,
+            simple_sensors(),
+            simple_legs(),
+            self.energy/2.0
+        )
+    }
 
     // добавить "массу" памяти
     fn count_massa(&self) -> f32 {
@@ -221,10 +242,10 @@ impl Osobj {
         self.position.movement(r, force.direct);
         
         // ограничение "аквариума"
-
+        let r_max = 400.0;// радиус аквариума
         let mut polar = self.position.to_polar();
-        if polar.r > 400.0 {
-            polar.r = 400.0;
+        if polar.r > r_max {
+            polar.r = r_max;
             self.position = polar.to_decart();
         }
 
@@ -286,7 +307,7 @@ impl Osobj {
     
     pub fn brain_training(&mut self, sigmoida: &Sigmoida){
         // "забываем" все
-        self.brain = Neuronet::new(&self.brain_configuration);
+        self.brain = Neuronet::new(&self.nnodes);
         for memorycell in self.memory.cells.iter(){
             for _ in 0..5{
                 self.brain.training(&memorycell.input, &memorycell.output, sigmoida);
@@ -296,87 +317,56 @@ impl Osobj {
 
 }
 
-// простейший мозг: один сенсор, один выход, один скрытый слой
-#[allow(dead_code)]
-pub fn simple_brain() -> Neuronet{
-    Neuronet::new(&vec![1,1,1])
-}
-
-#[allow(dead_code)]
-pub fn simple_sensors() -> Vec<Sensor> {
-    let sensor = Sensor{
-        typeofsensor: TypeOfSensor::Light,
-        direct: Direct::random(),
-    };
-    vec![sensor,]
-}
-
-#[allow(dead_code)]
-pub fn simple_legs() -> Vec<Leg> {
-    let leg = Leg{
-        direct: Direct::random(),
-    };
-    vec![leg,]
-}
-
 // Особь для тестирования
-#[allow(dead_code)]
 pub fn sample_osobj() -> Osobj{
 
-    let count_of_leg = 4;
-    let count_of_sensors = 4;
-
-    let brain_configuration = vec![count_of_sensors, 10, 10, 10, count_of_leg];
-    let memory = Memory::new(100);
-    
-    let leg_1 = Leg{
-        direct: Direct{fi:0.0}
-    };
-    let leg_2 = Leg{
-        direct: Direct{fi: 90.0}
-    };
-    let leg_3 = Leg{
-        direct: Direct{fi: 180.0}
-    };
-    let leg_4 = Leg{
-        direct: Direct{fi: 270.0}
-    };
-    let legs = vec![leg_1, leg_2, leg_3, leg_4];
-    
-    let sensor_1 = Sensor {
-        typeofsensor: TypeOfSensor::Light,
-        direct: Direct{fi: 0.0}
-    };
-    let sensor_2 = Sensor {
-        typeofsensor: TypeOfSensor::Light,
-        direct: Direct{fi: 90.0}
-    };
-    let sensor_3 = Sensor {
-        typeofsensor: TypeOfSensor::Light,
-        direct: Direct{fi: 180.0}
-    };
-    let sensor_4 = Sensor {
-        typeofsensor: TypeOfSensor::Light,
-        direct: Direct{fi: 270.0}
-    };
-    let sensors = vec![sensor_1, sensor_2, sensor_3, sensor_4];
-    
-    let position = Point{
-        x: 100.0,
-        y: -100.0,
-    };
-    
+    let brain_configuration = vec![10, 10, 10];
+    let memory_capacity = 10;
     let start_energy = 10.0;
-    let max_memory_cells = 10;
     
     Osobj::new(
-        position, 
         brain_configuration,
-        memory,
-        max_memory_cells,
-        sensors,
-        legs,
+        memory_capacity,
+        simple_sensors(),
+        simple_legs(),
         start_energy
     )
+
+}
+
+pub fn simple_legs() -> Vec<Leg>{
+
+    let mut result = Vec::with_capacity(4);
+
+    result.push(Leg{direct: Direct{fi:0.0}});
+    result.push(Leg{direct: Direct{fi:90.0}});
+    result.push(Leg{direct: Direct{fi:180.0}});
+    result.push(Leg{direct: Direct{fi:270.0}});
+
+    result
+}
+
+pub fn simple_sensors() -> Vec<Sensor>{
+
+    let mut result = Vec::with_capacity(4);
+
+    result.push(Sensor {
+        typeofsensor: TypeOfSensor::Light,
+        direct: Direct{fi: 0.0}
+    });
+    result.push(Sensor {
+        typeofsensor: TypeOfSensor::Light,
+        direct: Direct{fi: 90.0}
+    });
+    result.push(Sensor {
+        typeofsensor: TypeOfSensor::Light,
+        direct: Direct{fi: 180.0}
+    });
+    result.push(Sensor {
+        typeofsensor: TypeOfSensor::Light,
+        direct: Direct{fi: 270.0}
+    });
+
+    result
 
 }

@@ -10,3 +10,8 @@ edition = "2018"
 rand = "0.7"
 #neuronet = { file = "../neuronet", version = ">=0.1.2"}
 neuronet = { git = "https://github.com/poloskovi/neuronet", version = ">=0.1.2"}
+
+plotters = "^0.3.1"
+piston_window = "^0.112.0"
+systemstat = "0.1.7"
+plotters-piston = "^0.3.0"

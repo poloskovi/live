@@ -1,6 +1,5 @@
 extern crate neuronet;
 use neuronet::NeuroMatrix;
-// use crate::neuronet::MatrixAdditions;
 use crate::neuroadd::MatrixAdditions2;
 
 // Ячейка памяти особи
@@ -49,15 +48,15 @@ impl Memory{
             last_used: tact,
         };
         self.cells.push(memorycell);
-        //if self.cells.len() > self.capacity{
+        if self.cells.len() > self.capacity{
             // удалить самую старую ячейку
 //            todo!("написать код");
-            let result = self.cells.iter().min_by_key(|p| p.last_used);
-            match result{
-                Some(cell) => println!("{}", cell.last_used),
-                None => unreachable!()
-            }
-        //}
+//            let result = self.cells.iter().min_by_key(|p| p.last_used);
+//            match result{
+//                Some(cell) => println!("{}", cell.last_used),
+//                None => unreachable!()
+//            }
+        }
     }
     
     pub fn replace(&mut self,
