@@ -172,13 +172,15 @@ impl Osobj {
         let high = brain_configuration[i] + 1;
         brain_configuration[i] = rng.gen_range(low, high+1);
 
-        Osobj::new(
+        let mut new_osobj = Osobj::new(
             brain_configuration,
             self.memory_capacity,
             simple_sensors(),
             simple_legs(),
             self.energy/2.0
-        )
+        );
+        new_osobj.position = self.position;
+        new_osobj
     }
 
     // добавить "массу" памяти
@@ -251,10 +253,12 @@ impl Osobj {
 
     }
     
-    pub fn change_energy(&mut self, sol_force: f32){
+    pub fn change_energy(&mut self, sol_force: f32, poison_force: f32){
         let expenses = 0.1;  // постоянные расходы на перемещение
                             // можно сделать зависимыми от усилий ног
-        self.energy = self.energy + sol_force/1000.0 - expenses
+        self.energy = self.energy
+            + (sol_force-poison_force)/1000.0
+            - expenses
     }
     
     // поиск, есть ли в памяти похожая ситуация

@@ -44,9 +44,9 @@ use crate::neuroadd::MatrixAdditions2;
 use common::{Point, Polar, Force, Direct};
 
 // отображение
-use piston_window::{EventLoop, PistonWindow, WindowSettings};
-use plotters::prelude::*;
-use plotters_piston::{draw_piston_window, PistonBackend};
+// use piston_window::{EventLoop, PistonWindow, WindowSettings};
+// use plotters::prelude::*;
+// use plotters_piston::{draw_piston_window, PistonBackend};
 
 // источник энергии
 struct EnergySource {
@@ -101,6 +101,7 @@ fn delta_gain_energy(new_gain_energy: f32, prev_gain_energy: Option<f32>) -> Opt
 fn osobj_movement(tact: u32,
     osobj: &mut osobi::Osobj,
     sol: &EnergySource,
+    poison_force: f32,
     sigmoida: &Sigmoida){
 
     let mut sol_force_at_osobj = sol.force_at_point(osobj.position);
@@ -118,7 +119,7 @@ fn osobj_movement(tact: u32,
 
             //изменения после перемещения
             sol_force_at_osobj = sol.force_at_point(osobj.position);
-            osobj.change_energy(sol_force_at_osobj.f);
+            osobj.change_energy(sol_force_at_osobj.f, poison_force);
             let new_gain_energy = osobj.energy - prev_energy;
 
             // добавляем ячейку памяти
@@ -143,7 +144,7 @@ fn osobj_movement(tact: u32,
             osobj.movement(common_force);
             //изменения после перемещения
             sol_force_at_osobj = sol.force_at_point(osobj.position);
-            osobj.change_energy(sol_force_at_osobj.f);
+            osobj.change_energy(sol_force_at_osobj.f, poison_force);
             let new_gain_energy = osobj.energy - prev_energy;
 
             osobj.prev_gain_energy = Some(new_gain_energy);
@@ -175,7 +176,7 @@ fn osobj_movement(tact: u32,
             osobj.movement(common_force);
             //изменения после перемещения
             sol_force_at_osobj = sol.force_at_point(osobj.position);
-            osobj.change_energy(sol_force_at_osobj.f);
+            osobj.change_energy(sol_force_at_osobj.f, poison_force);
             let new_gain_energy = osobj.energy - prev_energy;
 
             match (memory_cell_delta_gain_energy, delta_gain_energy(new_gain_energy, osobj.prev_gain_energy)){
@@ -209,18 +210,19 @@ fn osobj_movement(tact: u32,
 
 }
 
-fn to_window_coord(p: Point, window_center: (i32, i32), scale: f32) -> (i32, i32){
-    ((window_center.0 + (p.x * scale) as i32),
-      window_center.1 - (p.y * scale) as i32)
-}
+// fn to_window_coord(p: Point, window_center: (i32, i32), scale: f32) -> (i32, i32){
+//     ((window_center.0 + (p.x * scale) as i32),
+//       window_center.1 - (p.y * scale) as i32)
+// }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+//fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main(){
 
-    // окно отрисовки
-    let mut window: PistonWindow = WindowSettings::new("Live", [450, 450])
-        .samples(4)
-        .build()
-        .unwrap();
+    // // окно отрисовки
+    // let mut window: PistonWindow = WindowSettings::new("Live", [450, 450])
+    //     .samples(4)
+    //     .build()
+    //     .unwrap();
 
     // используется в нейросети
     let sigmoida = neuronet::Sigmoida::new();
@@ -249,95 +251,99 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //      на наборе этой ячейки памяти. Чем чаще особь бывает в окрестности записанного состояния, 
     //      тем лучше нужно быть приспособленным именно к этому состоянию.
     //  6. В области [dLвх(мин)] << [dLвх(сред)] время от времени еще раз пробовать модифицировать Lвых
-   
+
+    let mut n_lived = 0;
+
     let mut tact = 0;
-    while let Some(_) = draw_piston_window(&mut window, |b| {
-
-        let root = b.into_drawing_area();
-        root.fill(&WHITE)?;
-        let window_size = root.dim_in_pixel(); // размер окна
-        //println!{"{:?}", window_size};
-        let window_center = ((window_size.0/2) as i32, (window_size.1/2) as i32); // координаты центра окна
-
-        let scale = (window_size.1 / 2) as f32 / (900.0 * 1.2); // 900 - радиус орбиты Солнца
-
-        // Аквариум. Определен в osobi.
-        // Переделать определение конфигурации аквариума в отдельный объект
-        root.draw(&Circle::new(
-                window_center,
-                (400.0 * scale) as i32,
-                Into::<ShapeStyle>::into(&BLUE),
-            ))?;
+    loop {
+        // while let Some(_) = draw_piston_window(&mut window, |b| {
+        //
+        //     let root = b.into_drawing_area();
+        //     root.fill(&WHITE)?;
+        //     let window_size = root.dim_in_pixel(); // размер окна
+        //     //println!{"{:?}", window_size};
+        //     let window_center = ((window_size.0/2) as i32, (window_size.1/2) as i32); // координаты центра окна
+        //
+        //     let scale = (window_size.1 / 2) as f32 / (900.0 * 1.2); // 900 - радиус орбиты Солнца
+        //
+        //     // Аквариум. Определен в osobi.
+        //     // Переделать определение конфигурации аквариума в отдельный объект
+        //     root.draw(&Circle::new(
+        //             window_center,
+        //             (400.0 * scale) as i32,
+        //             Into::<ShapeStyle>::into(&BLUE),
+        //         ))?;
 
         sol.position.direct.fi = sol.position.direct.fi + 0.005; // в градусах
-        if sol.position.direct.fi > 360.0{
+        if sol.position.direct.fi > 360.0 {
             sol.position.direct.fi = sol.position.direct.fi - 360.0;
         };
 
-        // рисуем солнце
-        let solar_coord = to_window_coord(
-            sol.position.to_decart(),
-            window_center,
-            scale);
-        //println!{"{:?}", solar_coord};
-        root.draw(&Circle::new(
-                solar_coord,
-                (30.0 * scale) as i32,
-                Into::<ShapeStyle>::into(&YELLOW).filled(),
-            ))?;
-
+        // // рисуем солнце
+        // let solar_coord = to_window_coord(
+        //     sol.position.to_decart(),
+        //     window_center,
+        //     scale);
+        // //println!{"{:?}", solar_coord};
+        // root.draw(&Circle::new(
+        //         solar_coord,
+        //         (30.0 * scale) as i32,
+        //         Into::<ShapeStyle>::into(&YELLOW).filled(),
+        //     ))?;
 
         let mut need_add = Vec::new();
-        for osobj in m_osobi.iter_mut(){
-            if !osobj.dead{
-                if osobj.energy > osobj.massa{
-                    //println!("Деление");
+        for osobj in m_osobi.iter_mut() {
+            if !osobj.dead {
+                if osobj.energy > osobj.massa {
                     need_add.push(osobj.copy_modify());
                     osobj.energy = osobj.energy / 2.0;
-                }else if osobj.energy < 0.0{
-                    //println!("Особь погибла");
+                    println!("{} \u{001b}[32mРодилась новая особь\u{001b}[0m", tact);
+                    n_lived += 1;
+                } else if osobj.energy < 0.0 {
+                    println!("{} \u{001b}[31mОсобь погибла\u{001b}[0m", tact);
                     osobj.dead = true;
+                    n_lived -= 1;
                 }
             }
         }
-        for osobj in need_add{
+        let poison_force = n_lived as f32;
+
+        for osobj in need_add {
             m_osobi.push(osobj);
         }
 
-        for osobj in m_osobi.iter_mut(){
-
-            if osobj.dead{
+        for osobj in m_osobi.iter_mut() {
+            if osobj.dead {
                 continue
             }
 
+            osobj_movement(tact, osobj, &sol, poison_force, &sigmoida);
 
-            osobj_movement(tact, osobj, &sol, &sigmoida);
-
-            let osobj_coord = to_window_coord(
-                osobj.position,
-                window_center,
-                scale);
-            //println!{"{:?}", solar_coord};
-            root.draw(&Circle::new(
-                    osobj_coord,
-                    (8.0 * scale) as i32,
-                    Into::<ShapeStyle>::into(&BLACK).filled(),
-                ))?;
-
-
+            // let osobj_coord = to_window_coord(
+            //     osobj.position,
+            //     window_center,
+            //     scale);
+            // root.draw(&Circle::new(
+            //         osobj_coord,
+            //         (8.0 * scale) as i32,
+            //         Into::<ShapeStyle>::into(&BLACK).filled(),
+            //     ))?;
         }// особи
 
         tact += 1;
-    
-        Ok(())
-    }){};
-    Ok(())
+        if tact > 100_000{break}
 
-//    println!(" живых {} особей:", m_osobi.len());
-//    for osobj in m_osobi.iter(){
-//        println!("{:?}", osobj.nnodes);
-//    }
-    
+        // Ok(())
+    //}){};
+    };
+
+    println!(" живых {} особей:", m_osobi.len());
+    for osobj in m_osobi.iter(){
+        println!("{:?}", osobj.nnodes);
+    }
+
+//    Ok(())
+
 //    println!("ячейки памяти:");
 //    for memorycell in osobj.memory.cells.iter(){
 //        println!("{}", memorycell.last_used);
